@@ -46,7 +46,7 @@ export async function signUp(email: string, password: string, confirmPassword: s
 }
 
 export async function signOut() {
-  const { error } = await getSupabase().auth.signOut();
+  const { error } = await getSupabase().auth.signOut({ scope: 'local' });
   if (error) throw new Error('Could not sign out. Please try again.');
 }
 

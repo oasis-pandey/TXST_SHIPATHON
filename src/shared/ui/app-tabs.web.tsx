@@ -25,6 +25,9 @@ export default function AppTabs() {
           <TabTrigger name="teams" href="/teams" asChild>
             <TabButton>Teams</TabButton>
           </TabTrigger>
+          <TabTrigger name="logout" href="/logout" asChild>
+            <TabButton>Logout</TabButton>
+          </TabTrigger>
         </CustomTabList>
       </TabList>
     </Tabs>

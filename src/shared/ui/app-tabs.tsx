@@ -24,6 +24,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>Teams</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'person.3', selected: 'person.3.fill' }} md="groups" />
       </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="logout">
+        <NativeTabs.Trigger.Label>Logout</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="rectangle.portrait.and.arrow.right" md="logout" />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }

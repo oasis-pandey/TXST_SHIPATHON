@@ -177,17 +177,6 @@ export async function createProposal(
     if (lookupError) throw new Error(lookupError.message);
     if (existing) return ensureApplicationConsent(existing.id);
 
-    // Applying is an explicit expression of interest, just like liking a team
-    // in discovery. Keep the backend prerequisite and admission checks intact.
-    const { error: likeError } = await requireSupabase().from('swipes').upsert({
-      actor_type: 'user',
-      actor_id: userId,
-      target_type: 'team',
-      target_id: teamId,
-      decision: 'like',
-      created_by_user_id: userId,
-    }, { onConflict: 'actor_type,actor_id,target_type,target_id' });
-    if (likeError) throw new Error(likeError.message);
   }
 
   const { data, error } = await requireSupabase().rpc('create_team_membership_proposal', {

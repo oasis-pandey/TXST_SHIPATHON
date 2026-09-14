@@ -58,6 +58,12 @@ export default function ProposalReviewScreen() {
   const yesVotes = proposal?.votes.filter((vote) => vote.decision === 'accept').length ?? 0;
   const currentVote = proposal?.votes.find((vote) => vote.voter_user_id === resource.data?.userId);
   const isCandidate = proposal?.candidate_user_id === resource.data?.userId;
+  const isCreator = proposal?.team?.created_by === resource.data?.userId;
+  const creatorVote = proposal?.votes.find(
+    (vote) => vote.voter_user_id === proposal.team?.created_by,
+  );
+  const creatorApproved = creatorVote?.decision === 'accept';
+  const canCurrentUserVote = resource.data?.member && (isCreator || creatorApproved);
 
   return (
     <TeamScreen>
@@ -89,14 +95,35 @@ export default function ProposalReviewScreen() {
             <ThemedText style={styles.voteCount}>
               {resource.data.member ? yesVotes : '—'} / {proposal.required_yes_votes} yes votes
             </ThemedText>
+            <View style={teamStyles.spread}>
+              <ThemedText type="smallBold">Creator approval</ThemedText>
+              <ThemedText type="smallBold">
+                {creatorVote?.decision === 'accept'
+                  ? 'Approved'
+                  : creatorVote?.decision === 'reject'
+                    ? 'Rejected'
+                    : 'Waiting'}
+              </ThemedText>
+            </View>
             <ThemedText themeColor="textSecondary">
-              The required count was fixed when this proposal was created and is never recomputed.
+              {proposal.required_yes_votes === 1
+                ? 'The team creator must approve this application.'
+                : 'The creator must approve, and more than half of the team must vote yes.'}
+              {' '}The {proposal.required_yes_votes}-vote requirement was fixed when this proposal was
+              created and is never recomputed.
             </ThemedText>
-            {resource.data.member && proposal.status === 'pending' && (
+            {resource.data.member && !isCreator && !creatorApproved && proposal.status === 'pending' && (
+              <ThemedText type="smallBold">
+                Waiting for the team creator before member voting opens.
+              </ThemedText>
+            )}
+            {canCurrentUserVote && proposal.status === 'pending' && (
               <View style={teamStyles.actions}>
                 <Button
                   label={currentVote?.decision === 'accept'
                     ? 'Accepted'
+                    : isCreator
+                      ? 'Approve as creator'
                     : proposal.proposal_type === 'user_swiped_team'
                       ? 'Accept applicant'
                       : 'Vote yes'}
@@ -106,6 +133,8 @@ export default function ProposalReviewScreen() {
                 <Button
                   label={currentVote?.decision === 'reject'
                     ? 'Rejected'
+                    : isCreator
+                      ? 'Reject as creator'
                     : proposal.proposal_type === 'user_swiped_team'
                       ? 'Reject applicant'
                       : 'Vote no'}

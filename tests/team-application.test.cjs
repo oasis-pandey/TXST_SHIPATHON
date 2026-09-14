@@ -8,7 +8,7 @@ const compiled = ts.transpileModule(fs.readFileSync('src/matching/data-access/te
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText;
 
-function setup({ existing = null, likeError = null, rpcError = null } = {}) {
+function setup({ existing = null, rpcError = null } = {}) {
   const events = [];
   const client = {
     auth: { getUser: async () => ({ data: { user: { id: 'candidate' } }, error: null }) },
@@ -30,11 +30,7 @@ function setup({ existing = null, likeError = null, rpcError = null } = {}) {
         };
         return query;
       }
-      assert.equal(table, 'swipes');
-      return { async upsert(row, options) {
-        events.push({ kind: 'like', row, options });
-        return { error: likeError };
-      } };
+      throw new Error(`Unexpected client table write: ${table}`);
     },
     async rpc(name, args) {
       events.push({
@@ -56,14 +52,11 @@ function setup({ existing = null, likeError = null, rpcError = null } = {}) {
   return { create: exports.createProposal, events };
 }
 
-test('applying persists the signed-in candidate interest before requesting admission review', async () => {
+test('applying delegates the swipe and proposal transaction to the trusted RPC', async () => {
   const { create, events } = setup();
   assert.equal(await create('team', 'candidate', 'user_swiped_team'), 'proposal-id');
-  assert.deepEqual(events.map(e => e.kind), ['like', 'proposal', 'consent']);
-  assert.equal(events[0].row.actor_id, 'candidate');
-  assert.equal(events[0].row.target_id, 'team');
-  assert.equal(events[0].row.decision, 'like');
-  assert.equal(events[1].name, 'create_team_membership_proposal');
+  assert.deepEqual(events.map(e => e.kind), ['proposal', 'consent']);
+  assert.equal(events[0].name, 'create_team_membership_proposal');
 });
 
 test('retry reopens an accepted pending application without creating another write', async () => {
@@ -82,10 +75,10 @@ test('retry records consent for an application created before the database migra
   assert.deepEqual(events.map(e => e.kind), ['consent']);
 });
 
-test('a failed interest write prevents proposal creation and exposes the reason', async () => {
-  const { create, events } = setup({ likeError: { message: 'Permission denied' } });
-  await assert.rejects(create('team', 'candidate', 'user_swiped_team'), /Permission denied/);
-  assert.equal(events.length, 1);
+test('a failed trusted application transaction exposes the database reason', async () => {
+  const { create, events } = setup({ rpcError: { message: 'Team is full' } });
+  await assert.rejects(create('team', 'candidate', 'user_swiped_team'), /Team is full/);
+  assert.deepEqual(events.map(e => e.kind), ['proposal']);
 });
 
 test('a user cannot apply as another candidate', async () => {
