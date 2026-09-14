@@ -1,86 +1,70 @@
----
-name: pairup-domain-feature-architecture
-description: Architecture rules for PairUp, a React Native + Expo application using domain-first organization with feature-based design inside each domain and Supabase Edge Functions for backend business logic. Use when creating, moving, reviewing, or refactoring PairUp frontend or backend code.
----
+PairUp Domain + Feature Architecture
 
-# PairUp Domain + Feature Architecture
-
-## Purpose
+Purpose
 
 Use this skill whenever working on PairUp architecture, adding features, creating folders, deciding where code belongs, or reviewing imports.
 
 PairUp intentionally combines two ideas:
 
-1. **Domain-driven organization at the top level** — code is grouped by business domain rather than technical type.
-2. **Feature-based organization inside each domain** — each domain owns multiple user-facing features, shared domain data access, and reusable presentational UI.
+Domain-driven organization at the top level — code is grouped by business domain rather than technical type.
+
+Feature-based organization inside each domain — each domain owns multiple user-facing features, shared domain data access, and reusable presentational UI.
 
 This is a lightweight DDD approach for a hackathon. Do not introduce aggregates, repositories, events, factories, or extra layers unless the business logic actually requires them.
 
----
+Core Rule
 
-# Core Rule
-
-Organize code around **business concepts first**.
+Organize code around business concepts first.
 
 Prefer:
 
-```text
 src/
 ├── users/
 ├── matching/
 ├── project-room/
 ├── shared/
 └── app/
-```
 
 Do not create:
 
-```text
 src/
 ├── components/
 ├── hooks/
 ├── services/
 ├── models/
 └── screens/
-```
 
 as global technical buckets.
 
-The top-level folders such as `users`, `matching`, and `project-room` are the application domains/bounded business areas.
+The top-level folders such as users, matching, and project-room are the application domains/bounded business areas.
 
----
-
-# Frontend Structure
+Frontend Structure
 
 Use this structure:
 
-```text
 src/
 ├── app/                       # Expo Router routes and app composition only
 │
 ├── users/                     # Domain
-│   ├── features/              # Smart feature modules
-│   │   ├── sign-in/
-│   │   ├── create-profile/
-│   │   ├── edit-profile/
-│   │   └── view-profile/
-│   ├── data/                  # Domain data access, API calls, types/models
+│   ├── sign-in/               # Feature
+│   ├── create-profile/        # Feature
+│   ├── edit-profile/          # Feature
+│   ├── view-profile/          # Feature
+│   ├── data-access/           # Domain data access + store/state
 │   └── ui/                    # Dumb/presentational domain UI
 │
 ├── matching/                  # Domain
-│   ├── features/
-│   │   ├── discover/
-│   │   ├── swipe/
-│   │   └── view-matches/
-│   ├── data/
+│   ├── discover/              # Feature
+│   ├── swipe/                 # Feature
+│   ├── view-matches/          # Feature
+│   ├── data-access/
 │   └── ui/
 │
 ├── project-room/              # Domain
-│   ├── features/
-│   │   ├── room/
-│   │   ├── goals/
-│   │   └── sprint-timer/
-│   ├── data/
+│   ├── room/                  # Feature
+│   ├── goals/                 # Feature
+│   ├── sprint-timer/          # Feature
+│   ├── data-access/
 │   └── ui/
 │
 └── shared/
@@ -89,152 +73,203 @@ src/
     ├── hooks/
     ├── utils/
     └── types/
-```
 
----
-
-# Domain Rules
+Domain Rules
 
 A domain is a major business concept with its own vocabulary and responsibilities.
 
 For PairUp:
 
-- `users` owns developer identity, profile, skills, availability, authentication-facing behavior, and profile editing.
-- `matching` owns discovery, swipes, mutual matches, candidate filtering, and match presentation.
-- `project-room` owns collaboration after a match: goals, repo links, sprint timer, and room state.
-- `shared` owns code that has no knowledge of a specific PairUp domain.
-- `app` owns routing, providers, bootstrapping, navigation composition, and top-level layouts.
+users owns developer identity, profile, skills, availability, authentication-facing behavior, and profile editing.
 
-Use domain language in names. Prefer `DeveloperProfile`, `Swipe`, `Match`, `ProjectRoom`, and `SprintGoal` over generic names such as `Item`, `Manager`, or `DataObject`.
+matching owns discovery, swipes, mutual matches, candidate filtering, and match presentation.
+
+project-room owns collaboration after a match: goals, repo links, sprint timer, and room state.
+
+shared owns code that has no knowledge of a specific PairUp domain.
+
+app owns routing, providers, bootstrapping, navigation composition, and top-level layouts.
+
+Use domain language in names. Prefer DeveloperProfile, Swipe, Match, ProjectRoom, and SprintGoal over generic names such as Item, Manager, or DataObject.
 
 If the same concept begins meaning different things in two areas, treat that as a signal that the domain boundary may need refinement.
 
----
-
-# Feature Rules
+Feature Rules
 
 A feature represents a concrete user capability or use case within a domain.
 
 Examples:
 
-```text
-users/features/create-profile
-matching/features/discover
-matching/features/swipe
-project-room/features/goals
-```
+users/create-profile
+matching/discover
+matching/swipe
+project-room/goals
 
-A feature is a **smart component/module**. It may:
+A feature is a smart component/module. It may:
 
-- own local state
-- orchestrate domain behavior
-- call functions from its domain's `data/` folder
-- compose components from its domain's `ui/` folder
-- compose components from `shared/ui/`
-- handle loading/error/success state
-- translate route/user interaction into domain actions
+own local state
 
-A feature should not contain raw duplicated Supabase query logic when that logic belongs in `data/`.
+orchestrate domain behavior
+
+call functions from its domain's data-access/ folder
+
+compose components from its domain's ui/ folder
+
+compose components from shared/ui/
+
+handle loading/error/success state
+
+translate route/user interaction into domain actions
+
+A feature should not contain raw duplicated Supabase query logic when that logic belongs in data-access/.
 
 Example flow:
 
-```text
 Expo route
    ↓
 Feature / smart component
-   ├── domain data
+   ├── domain data-access
    └── domain UI
           ↓
        shared UI
-```
 
----
+Data Access Rules
 
-# Data Rules
+Each domain's data-access/ folder owns external data access and coordinated client state for that domain.
 
-Each domain's `data/` folder owns communication with external data sources for that domain.
+For React/React Native, use Redux Toolkit when a domain needs shared state. Keep the same company-inspired idea of feature-specific state folders under data-access/store/, but use React/Redux Toolkit conventions instead of NgRx-specific effects and providers.
 
-Examples:
+Example:
 
-```text
-matching/data/
+matching/data-access/
 ├── matching-service.ts
 ├── matching-types.ts
-└── matching-mappers.ts
-```
+├── matching-mappers.ts
+└── store/
+    ├── matching.reducer.ts
+    ├── matching.selectors.ts
+    │
+    ├── discover/
+    │   ├── discover.slice.ts
+    │   ├── discover.selectors.ts
+    │   ├── discover.thunks.ts
+    │   └── discover.types.ts
+    │
+    └── swipe/
+        ├── swipe.slice.ts
+        ├── swipe.selectors.ts
+        ├── swipe.thunks.ts
+        └── swipe.types.ts
 
-The data layer may contain:
+The feature folders own their own state logic. The general domain files combine and expose the domain's state to the application.
 
-- Supabase client calls
-- Edge Function invocations
-- DTOs
-- TypeScript domain-facing types
-- mapping functions
-- query helpers
+Use these React/Redux Toolkit pieces consistently:
 
-The data layer must not import presentational UI.
+Slice defines the feature state, synchronous reducers, and generated actions.
 
-Avoid direct Supabase calls inside screens and dumb UI components.
+Actions describe events or user intent and are usually generated by createSlice.
+
+Dispatch sends actions or async thunks to the Redux store.
+
+Reducers update state in response to actions. Redux Toolkit uses Immer so reducer code can use mutation-style syntax safely.
+
+Thunks handle asynchronous workflows such as Supabase calls or Edge Function invocations and then update state through fulfilled/rejected actions.
+
+Selectors expose and derive state without making components depend on the exact store shape.
+
+Domain reducer combines the feature reducers for a domain such as matching.
+
+Root store registers the domain reducers used by the application.
+
+Typical flow:
+
+User interaction
+   ↓
+Feature dispatches action or thunk
+   ↓
+Thunk performs async work when needed
+   ↓
+Slice reducer updates state
+   ↓
+Selector exposes state to the feature/UI
+
+At the application level, the Redux store can combine domain reducers:
+
+app/store.ts
+   ↓
+├── users reducer
+├── matching reducer
+└── project-room reducer
+
+The data-access layer may also contain:
+
+Supabase client calls
+
+Edge Function invocations
+
+DTOs and domain-facing TypeScript types
+
+mapping functions
+
+query helpers
+
+Redux Toolkit slices, selectors, and thunks when shared state is needed
+
+Keep data access out of presentational UI. UI components should not import Supabase, Edge Function clients, or persistence logic directly.
 
 Prefer:
 
-```ts
 await matchingService.swipeDeveloper(targetUserId, "like");
-```
 
-instead of placing this directly in a component:
+over placing persistence logic directly in a component:
 
-```ts
 await supabase.from("swipes").insert(...);
-```
 
-When important business behavior requires multiple database operations, call an Edge Function instead of orchestrating those operations on the client.
+For multi-step business behavior that must remain consistent, call a Supabase Edge Function instead of coordinating multiple database operations in the client.
 
----
+Do not create Redux state for everything. For simple component-local state, use useState or useReducer. Add Redux Toolkit when state is shared across screens/features or when a coordinated async workflow benefits from centralized state.
 
-# UI Rules
+UI Rules
 
-A domain's `ui/` folder contains reusable presentational components that belong specifically to that domain.
+A domain's ui/ folder contains reusable presentational components that belong specifically to that domain.
 
 Examples:
 
-```text
 matching/ui/
 ├── DeveloperCard.tsx
 ├── MatchCard.tsx
 └── SwipeActions.tsx
-```
 
 UI components should:
 
-- receive data through props
-- emit user actions through callbacks
-- focus on rendering and interaction
-- avoid knowing how persistence works
-- avoid directly calling Supabase
-- avoid owning cross-screen business workflows
+receive data through props
+
+emit user actions through callbacks
+
+focus on rendering and interaction
+
+avoid knowing how persistence works
+
+avoid directly calling Supabase
+
+avoid owning cross-screen business workflows
 
 Example:
 
-```tsx
 <DeveloperCard
   developer={developer}
   onLike={() => handleSwipe("like")}
   onPass={() => handleSwipe("pass")}
 />
-```
 
-`DeveloperCard` renders the card. The feature decides what liking or passing actually does.
+DeveloperCard renders the card. The feature decides what liking or passing actually does.
 
----
+Shared Rules
 
-# Shared Rules
-
-`shared/` contains only code that can be used across domains without depending on one of them.
+shared/ contains only code that can be used across domains without depending on one of them.
 
 Good examples:
 
-```text
 shared/
 ├── ui/
 │   ├── Button.tsx
@@ -245,76 +280,68 @@ shared/
 ├── hooks/
 ├── utils/
 └── types/
-```
 
-Do not move code into `shared/` simply because two files use it.
+Do not move code into shared/ simply because two files use it.
 
-Move code into `shared/` only when it is genuinely domain-independent.
+Move code into shared/ only when it is genuinely domain-independent.
 
 Bad:
 
-```text
 shared/utils/calculateMatchCompatibility.ts
-```
 
-That belongs to `matching` because compatibility is matching-domain behavior.
+That belongs to matching because compatibility is matching-domain behavior.
 
----
-
-# Import Direction
+Import Direction
 
 Keep dependencies predictable.
 
 Allowed direction:
 
-```text
 app
  ↓
-domain/features
- ├── domain/data
+domain/<feature>
+ ├── domain/data-access
  ├── domain/ui
  └── shared
 
- domain/data ──→ shared
+ domain/data-access ──→ shared
  domain/ui   ──→ shared
  shared      ──→ external libraries only
-```
 
 Rules:
 
-1. `app/` may compose features from multiple domains.
-2. A feature may use its own domain's `data` and `ui` code.
-3. Domain `ui` must not import domain `data`.
-4. Domain `data` must not import domain `ui`.
-5. `shared` must not import from `users`, `matching`, or `project-room`.
-6. Avoid direct imports between unrelated domains.
-7. If two domains must coordinate, compose them in `app/`, a higher-level feature, or through a clear backend contract rather than tightly coupling internals.
+app/ may compose features from multiple domains.
 
----
+A feature may use its own domain's data-access and ui code.
 
-# Expo Router Rules
+Domain ui must not import domain data-access.
 
-Treat `app/` as routing and composition, not the place where business logic lives.
+Domain data-access must not import domain ui.
+
+shared must not import from users, matching, or project-room.
+
+Avoid direct imports between unrelated domains.
+
+If two domains must coordinate, compose them in app/, a higher-level feature, or through a clear backend contract rather than tightly coupling internals.
+
+Expo Router Rules
+
+Treat app/ as routing and composition, not the place where business logic lives.
 
 Routes should be thin.
 
 Prefer:
 
-```tsx
 export default function DiscoverScreen() {
   return <DiscoverFeature />;
 }
-```
 
 Avoid putting fetching, matching rules, swipe state, or Supabase mutations directly inside route files.
 
----
-
-# Backend Structure
+Backend Structure
 
 Use Supabase Edge Functions for backend workflows that contain business logic or multiple database operations.
 
-```text
 supabase/
 ├── functions/
 │   ├── _shared/
@@ -336,19 +363,15 @@ supabase/
 │       └── index.ts
 │
 └── migrations/
-```
 
-Organize Edge Functions around **use cases**, not generic controller/service/repository folders.
+Organize Edge Functions around use cases, not generic controller/service/repository folders.
 
----
-
-# Backend Business Logic Rule
+Backend Business Logic Rule
 
 An Edge Function should own workflows that must remain consistent on the backend.
 
-Example: `create-swipe`
+Example: create-swipe
 
-```text
 receive authenticated user
         ↓
 validate target user
@@ -360,51 +383,53 @@ check reciprocal swipe
 create match if reciprocal
         ↓
 return result
-```
 
 Do not make the React Native app perform five independent database operations for a single business action.
 
 The client should think in terms of domain actions:
 
-```ts
 swipeDeveloper(targetUserId, "like")
-```
 
 not database operations.
 
----
+DDD Guidance for PairUp
 
-# DDD Guidance for PairUp
-
-Use DDD primarily for **boundaries and language**, not ceremony.
+Use DDD primarily for boundaries and language, not ceremony.
 
 Apply:
 
-- clear domain boundaries
-- ubiquitous domain vocabulary
-- business rules near the domain that owns them
-- explicit contracts between domains
-- domain-oriented names
+clear domain boundaries
+
+ubiquitous domain vocabulary
+
+business rules near the domain that owns them
+
+explicit contracts between domains
+
+domain-oriented names
 
 Do NOT automatically add:
 
-- repository interfaces
-- aggregate roots
-- domain event buses
-- CQRS
-- event sourcing
-- factories
-- dependency injection containers
+repository interfaces
+
+aggregate roots
+
+domain event buses
+
+CQRS
+
+event sourcing
+
+factories
+
+dependency injection containers
 
 PairUp is a small hackathon application. Add those patterns only when a concrete business rule requires them.
 
----
-
-# Where Does This Code Go?
+Where Does This Code Go?
 
 Use this decision process:
 
-```text
 Is it routing/app setup?
   → app/
 
@@ -412,10 +437,10 @@ Does it belong to one business domain?
   → that domain
 
 Is it a complete user capability/use case?
-  → domain/features/<feature>
+  → domain/<feature>
 
 Does it fetch/store/map data for the domain?
-  → domain/data/
+  → domain/data-access/
 
 Is it reusable presentation specific to the domain?
   → domain/ui/
@@ -425,48 +450,45 @@ Is it truly independent of all domains?
 
 Does it perform trusted multi-step backend business logic?
   → Supabase Edge Function
-```
 
----
+Example: Matching Domain
 
-# Example: Matching Domain
-
-```text
 matching/
-├── features/
-│   ├── discover/
-│   │   └── DiscoverFeature.tsx
-│   ├── swipe/
-│   │   └── SwipeFeature.tsx
-│   └── view-matches/
-│       └── ViewMatchesFeature.tsx
+├── discover/
+│   └── DiscoverFeature.tsx
+├── swipe/
+│   └── SwipeFeature.tsx
+├── view-matches/
+│   └── ViewMatchesFeature.tsx
 │
-├── data/
+├── data-access/
 │   ├── matching-service.ts
 │   ├── matching-types.ts
-│   └── matching-mappers.ts
+│   ├── matching-mappers.ts
+│   └── store/
+│       └── discover/
+│           ├── discover.slice.ts
+│           ├── discover.selectors.ts
+│           ├── discover.thunks.ts
+│           └── discover.types.ts
 │
 └── ui/
     ├── DeveloperCard.tsx
     ├── MatchCard.tsx
     └── SwipeActions.tsx
-```
 
 Possible flow:
 
-```text
 app/discover.tsx
       ↓
 DiscoverFeature
       ↓
-matching/data/matching-service
+matching/data-access/matching-service
       ↓
 get-candidates Edge Function
-```
 
 For a swipe:
 
-```text
 SwipeFeature
    ↓
 matchingService.swipeDeveloper()
@@ -474,36 +496,45 @@ matchingService.swipeDeveloper()
 create-swipe Edge Function
    ↓
 Postgres
-```
 
----
-
-# Code Review Checklist
+Code Review Checklist
 
 Before accepting new PairUp code, verify:
 
-- Is the file inside the correct business domain?
-- Is a feature a smart orchestrator rather than a giant UI file?
-- Are presentational components kept in `ui/`?
-- Are Supabase/Edge Function calls isolated in `data/`?
-- Are route files thin?
-- Does `shared/` remain domain-independent?
-- Are domain terms used consistently?
-- Is business logic on the trusted backend when it needs atomicity or security?
-- Are unrelated domains loosely coupled?
-- Has unnecessary architecture been avoided?
+Is the file inside the correct business domain?
 
----
+Is a feature a smart orchestrator rather than a giant UI file?
 
-# Project Priority
+Are presentational components kept in ui/?
+
+Are Supabase/Edge Function calls isolated in data-access/?
+
+Are route files thin?
+
+Does shared/ remain domain-independent?
+
+Are domain terms used consistently?
+
+Is business logic on the trusted backend when it needs atomicity or security?
+
+Are unrelated domains loosely coupled?
+
+Has unnecessary architecture been avoided?
+
+Project Priority
 
 For this hackathon, optimize for:
 
-1. clarity
-2. predictable file placement
-3. strong domain boundaries
-4. easy parallel development
-5. testable business logic
-6. minimal architecture overhead
+clarity
+
+predictable file placement
+
+strong domain boundaries
+
+easy parallel development
+
+testable business logic
+
+minimal architecture overhead
 
 When choosing between architectural purity and shipping a clear, maintainable feature during the hackathon, prefer the simplest design that preserves the domain boundary and dependency rules above.
