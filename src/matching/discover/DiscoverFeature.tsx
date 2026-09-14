@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
 import { StatusBar } from "expo-status-bar";
 import {
+    useCallback,
     useEffect,
     useLayoutEffect,
     useMemo,
@@ -26,6 +27,7 @@ import {
 import { createReduxProfileQueue } from "@/matching/data-access/redux-profile-queue";
 import { store } from "@/shared/data-access/store";
 import { requestUserRecommendations } from "@/matching/data-access/user-recommendation-service";
+import { getSwipeIntent } from "@/matching/swipe/swipe-intent";
 import { useLikeDeveloper } from "@/matching/swipe/use-like-developer";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -136,7 +138,7 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
             });
     }, [queue, recommendationRequestAttempt, snapshot.length, snapshot.position]);
 
-    const finishSwipe = (direction: 1 | -1) => {
+    const finishSwipe = useCallback((direction: 1 | -1) => {
         if (!activeCard || swipeInProgress.current) return;
 
         swipeInProgress.current = true;
@@ -156,18 +158,26 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
             queue.advance(activeCard.queuePosition);
             setIsBioOpen(false);
         });
-    };
-    const handleHeartLike = async () => {
+    }, [activeCard, position, queue]);
+    const resetCard = useCallback(() =>
+        Animated.spring(position, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: true,
+        }).start(), [position]);
+    const handleLike = useCallback(async () => {
+        resetCard();
         if (!targetUserId || isSwiping || isSubmittingLike) return;
 
         const result = await submitLike(targetUserId);
         if (result) finishSwipe(1);
-    };
-    const resetCard = () =>
-        Animated.spring(position, {
-            toValue: { x: 0, y: 0 },
-            useNativeDriver: true,
-        }).start();
+    }, [
+        finishSwipe,
+        isSubmittingLike,
+        isSwiping,
+        resetCard,
+        submitLike,
+        targetUserId,
+    ]);
     const panResponder = useMemo(
         () =>
             PanResponder.create({
@@ -182,16 +192,17 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                 ),
                 onPanResponderRelease: (_, gesture) => {
                     if (swipeInProgress.current) return;
-                    if (gesture.dx > SWIPE_THRESHOLD) {
-                        finishSwipe(1);
-                    } else if (gesture.dx < -SWIPE_THRESHOLD) {
+                    const intent = getSwipeIntent(gesture.dx, SWIPE_THRESHOLD);
+                    if (intent === "like") {
+                        void handleLike();
+                    } else if (intent === "pass") {
                         finishSwipe(-1);
                     } else {
                         resetCard();
                     }
                 },
             }),
-        [activeCard, isSubmittingLike, position, queue],
+        [finishSwipe, handleLike, isSubmittingLike, position, resetCard],
     );
     const rotation = position.x.interpolate({
         inputRange: [-screenWidth, 0, screenWidth],
@@ -323,8 +334,21 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                         label="♥"
                         color="#38BA8D"
                         size="large"
-                        onPress={handleHeartLike}
+                        onPress={() => void handleLike()}
                         accessibilityLabel="Like"
+                        disabled={
+                            !activeCard ||
+                            !targetUserId ||
+                            isSwiping ||
+                            isSubmittingLike
+                        }
+                    />
+                    <ActionButton
+                        label="★"
+                        color="#9B78D1"
+                        size="small"
+                        onPress={() => void handleLike()}
+                        accessibilityLabel="Favorite"
                         disabled={
                             !activeCard ||
                             !targetUserId ||
