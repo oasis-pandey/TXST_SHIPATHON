@@ -29,6 +29,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     let active = true;
+    let deferredAuthResolution: ReturnType<typeof setTimeout> | undefined;
 
     async function resolveSession(nextSession: Session | null) {
       if (!active) return;
@@ -66,9 +67,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     void initialize();
     const unsubscribe = observeAuth((event: AuthChangeEvent, nextSession: Session | null) => {
       if (event === 'SIGNED_OUT' || !nextSession) {
+        if (deferredAuthResolution) clearTimeout(deferredAuthResolution);
         void resolveSession(null);
-      } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-        void resolveSession(nextSession);
+      } else if (event === 'SIGNED_IN') {
+        if (deferredAuthResolution) clearTimeout(deferredAuthResolution);
+        deferredAuthResolution = setTimeout(() => {
+          deferredAuthResolution = undefined;
+          void resolveSession(nextSession);
+        }, 0);
       } else if (active) {
         setSession(nextSession);
       }
@@ -76,6 +82,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     return () => {
       active = false;
+      if (deferredAuthResolution) clearTimeout(deferredAuthResolution);
       unsubscribe();
     };
   }, [attempt]);

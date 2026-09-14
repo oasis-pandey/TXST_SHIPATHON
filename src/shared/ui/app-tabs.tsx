@@ -2,10 +2,12 @@ import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/shared/lib/theme';
+import { useAuth } from '@/users/data-access/auth-context';
 
 export default function AppTabs() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
+  const { signOut } = useAuth();
 
   return (
     <NativeTabs
@@ -25,7 +27,14 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf={{ default: 'person.3', selected: 'person.3.fill' }} md="groups" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="logout">
+      <NativeTabs.Trigger
+        name="logout"
+        disabled
+        listeners={{
+          tabPress: () => {
+            void signOut();
+          },
+        }}>
         <NativeTabs.Trigger.Label>Logout</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="rectangle.portrait.and.arrow.right" md="logout" />
       </NativeTabs.Trigger>
