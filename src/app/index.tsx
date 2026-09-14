@@ -1,27 +1,33 @@
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { type MatchProfile, type ProfileQueue } from '@/features/discover/profile-queue';
-import { createSampleProfileQueue } from '@/features/discover/sample-profile-queue';
+import { createReduxProfileQueue } from '@/features/discover/redux-profile-queue';
+import { SAMPLE_PROFILES } from '@/features/discover/sample-profile-queue';
+import { store } from '@/store/store';
 
 const { width: screenWidth } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 110;
 
 export default function DiscoverRoute() {
-  const [queue] = useState(createSampleProfileQueue);
+  const queue = useMemo(() => createReduxProfileQueue(store, 'default-discover'), []);
+  useEffect(() => {
+    queue.replace(SAMPLE_PROFILES);
+  }, [queue]);
   return <DiscoverView queue={queue} />;
 }
 
 export function DiscoverView({ queue }: { queue: ProfileQueue }) {
   const [, setQueueRevision] = useState(0);
+  useEffect(() => queue.subscribe(() => setQueueRevision((value) => value + 1)), [queue]);
   const [isBioOpen, setIsBioOpen] = useState(false);
   const position = useRef(new Animated.ValueXY()).current;
   const profile = queue.current();
   const nextProfile = queue.peek();
-  const finishSwipe = (direction: 1 | -1) => Animated.timing(position, { toValue: { x: direction * (screenWidth + 80), y: 0 }, duration: 230, useNativeDriver: true }).start(() => { position.setValue({ x: 0, y: 0 }); queue.advance(); setQueueRevision((value) => value + 1); setIsBioOpen(false); });
+  const finishSwipe = (direction: 1 | -1) => Animated.timing(position, { toValue: { x: direction * (screenWidth + 80), y: 0 }, duration: 230, useNativeDriver: true }).start(() => { position.setValue({ x: 0, y: 0 }); queue.advance(); setIsBioOpen(false); });
   const resetCard = () => Animated.spring(position, { toValue: { x: 0, y: 0 }, useNativeDriver: true }).start();
   const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 6 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
@@ -34,7 +40,7 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
   return <View style={styles.page}><StatusBar style="dark" /><SafeAreaView style={styles.safeArea} edges={['top']}>
     <View style={styles.header}><View><Text style={styles.eyebrow}>DISCOVER</Text><Text style={styles.heading}>Made for you</Text></View><Pressable style={styles.filterButton} accessibilityLabel="Open discovery filters"><Text style={styles.filterIcon}>☷</Text></Pressable></View>
     <View style={styles.progressRow}>{Array.from({ length: queue.length }, (_, step) => <View key={step} style={[styles.progress, step <= queue.position && styles.progressActive]} />)}</View>
-    <View style={styles.deck}>{nextProfile && <ProfileCard profile={nextProfile} style={styles.backCard} />}{profile ? <Animated.View {...panResponder.panHandlers} style={[styles.card, { transform: [...position.getTranslateTransform(), { rotate: rotation }] }]}><Animated.Text style={[styles.stamp, styles.nopeStamp, { opacity: nopeOpacity }]}>NOPE</Animated.Text><Animated.Text style={[styles.stamp, styles.likeStamp, { opacity: likeOpacity }]}>LIKE</Animated.Text><ProfileCard profile={profile} expanded={isBioOpen} onMore={() => setIsBioOpen((value) => !value)} /></Animated.View> : <View style={styles.emptyState}><Text style={styles.emptyEmoji}>✨</Text><Text style={styles.emptyTitle}>You&apos;re all caught up</Text><Text style={styles.emptyCopy}>New people will appear here when they&apos;re nearby.</Text><Pressable style={styles.refreshButton} onPress={() => { queue.reset(); setQueueRevision((value) => value + 1); }}><Text style={styles.refreshText}>Start over</Text></Pressable></View>}</View>
+    <View style={styles.deck}>{nextProfile && <ProfileCard profile={nextProfile} style={styles.backCard} />}{profile ? <Animated.View {...panResponder.panHandlers} style={[styles.card, { transform: [...position.getTranslateTransform(), { rotate: rotation }] }]}><Animated.Text style={[styles.stamp, styles.nopeStamp, { opacity: nopeOpacity }]}>NOPE</Animated.Text><Animated.Text style={[styles.stamp, styles.likeStamp, { opacity: likeOpacity }]}>LIKE</Animated.Text><ProfileCard profile={profile} expanded={isBioOpen} onMore={() => setIsBioOpen((value) => !value)} /></Animated.View> : <View style={styles.emptyState}><Text style={styles.emptyEmoji}>✨</Text><Text style={styles.emptyTitle}>You&apos;re all caught up</Text><Text style={styles.emptyCopy}>New people will appear here when they&apos;re nearby.</Text><Pressable style={styles.refreshButton} onPress={queue.reset}><Text style={styles.refreshText}>Start over</Text></Pressable></View>}</View>
     <View style={styles.actions}><ActionButton label="↶" color="#F0A442" size="small" onPress={resetCard} accessibilityLabel="Rewind" /><ActionButton label="×" color="#E76B6C" size="large" onPress={() => profile && finishSwipe(-1)} accessibilityLabel="Pass" /><ActionButton label="★" color="#9B78D1" size="small" onPress={() => profile && finishSwipe(1)} accessibilityLabel="Super like" /><ActionButton label="♥" color="#38BA8D" size="large" onPress={() => profile && finishSwipe(1)} accessibilityLabel="Like" /></View><Text style={styles.hint}>Swipe right to like · left to pass</Text>
   </SafeAreaView></View>;
 }

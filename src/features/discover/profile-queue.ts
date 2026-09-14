@@ -3,7 +3,7 @@ export type MatchProfile = {
   age: number;
   distance: string;
   bio: string;
-  tags: readonly string[];
+  tags: string[];
   image: string;
   color: string;
 };
@@ -17,27 +17,8 @@ export interface ProfileQueue {
   peek(): MatchProfile | undefined;
   advance(): void;
   reset(): void;
+  replace(profiles: readonly MatchProfile[]): void;
+  subscribe(listener: () => void): () => void;
   readonly length: number;
   readonly position: number;
-}
-
-export function createProfileQueue(profiles: readonly MatchProfile[]): ProfileQueue {
-  let position = 0;
-
-  return {
-    current: () => profiles[position],
-    peek: () => profiles[position + 1],
-    advance: () => {
-      position = Math.min(position + 1, profiles.length);
-    },
-    reset: () => {
-      position = 0;
-    },
-    get length() {
-      return profiles.length;
-    },
-    get position() {
-      return position;
-    },
-  };
 }
