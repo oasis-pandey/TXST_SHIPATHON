@@ -21,7 +21,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { store } from "@/shared/data-access/store";
 import {
-    type MatchProfile,
+    type UserRecommendationProfile,
     type ProfileQueue,
 } from "@/matching/data-access/profile-queue";
 import { createReduxProfileQueue } from "@/matching/data-access/redux-profile-queue";
@@ -31,7 +31,7 @@ const { width: screenWidth } = Dimensions.get("window");
 const SWIPE_THRESHOLD = 110;
 
 type ActiveCard = {
-    profile: MatchProfile;
+    profile: UserRecommendationProfile;
     queuePosition: number;
     position: Animated.ValueXY;
 };
@@ -295,33 +295,35 @@ function ProfileCard({
     style,
     expanded = false,
 }: {
-    profile: MatchProfile;
+    profile: UserRecommendationProfile;
     style?: object;
     expanded?: boolean;
 }) {
     return (
         <View style={[styles.cardInner, style]}>
             <Image
-                source={{ uri: profile.image }}
+                source={{ uri: profile.avatar_url ?? "https://placehold.co/1100x1600/png" }}
                 style={styles.photo}
                 contentFit="cover"
             />
-            <View style={[styles.photoTint, { backgroundColor: profile.color }]} />
+            <View style={styles.photoTint} />
             <View style={styles.cardContent}>
                 <View style={styles.nameRow}>
                     <Text style={styles.name}>
-                        {profile.name}, {profile.age}
+                        {profile.display_name}
                     </Text>
                 </View>
-                <Text style={styles.distance}>● {profile.distance}</Text>
+                <Text style={styles.distance}>
+                    ● {[profile.skill_level, profile.availability].filter(Boolean).join(" · ") || "Developer"}
+                </Text>
                 <View style={styles.tags}>
-                    {profile.tags.map((tag) => (
+                    {[...profile.tech_stack, ...profile.preferred_roles].map((tag) => (
                         <View key={tag} style={styles.tag}>
                             <Text style={styles.tagText}>{tag}</Text>
                         </View>
                     ))}
                 </View>
-                {expanded && <Text style={styles.bio}>{profile.bio}</Text>}
+                {expanded && profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
             </View>
         </View>
     );
@@ -427,7 +429,7 @@ const styles = StyleSheet.create({
     },
     cardInner: { flex: 1, overflow: "hidden", backgroundColor: "#D5A091" },
     photo: { ...StyleSheet.absoluteFill },
-    photoTint: { ...StyleSheet.absoluteFill, opacity: 0.12 },
+    photoTint: { ...StyleSheet.absoluteFill, backgroundColor: "#241916", opacity: 0.12 },
     cardContent: {
         marginTop: "auto",
         padding: 22,

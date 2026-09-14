@@ -1,9 +1,9 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
-import type { MatchProfile } from "@/matching/data-access/profile-queue";
+import type { UserRecommendationProfile } from "@/matching/data-access/profile-queue";
 
 type QueueState = {
-  profiles: MatchProfile[];
+  profiles: UserRecommendationProfile[];
   position: number;
 };
 
@@ -19,7 +19,7 @@ const profileQueuesSlice = createSlice({
       state,
       action: PayloadAction<{
         queueId: string;
-        profiles: readonly MatchProfile[];
+        profiles: readonly UserRecommendationProfile[];
       }>,
     ) => {
       state[action.payload.queueId] = {

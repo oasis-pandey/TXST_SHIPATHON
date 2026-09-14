@@ -8,7 +8,7 @@ import {
 import type { RootState } from "@/shared/data-access/store";
 
 import type {
-  MatchProfile,
+  UserRecommendationProfile,
   ProfileQueue,
   ProfileQueueSnapshot,
 } from "./profile-queue";
@@ -63,7 +63,7 @@ export function createReduxProfileQueue(
     advance: (expectedPosition) =>
       store.dispatch(advanceQueue({ queueId, expectedPosition })),
     reset: () => store.dispatch(resetQueue({ queueId })),
-    replace: (profiles: readonly MatchProfile[]) =>
+    replace: (profiles: readonly UserRecommendationProfile[]) =>
       store.dispatch(replaceQueue({ queueId, profiles })),
     subscribe: (listener) => store.subscribe(listener),
   };

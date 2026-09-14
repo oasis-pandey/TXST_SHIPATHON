@@ -1,16 +1,28 @@
-export type MatchProfile = {
-  name: string;
-  age: number;
-  distance: string;
-  bio: string;
-  tags: string[];
-  image: string;
-  color: string;
+/**
+ * The client-side shape returned by the user recommendation API.
+ *
+ * It intentionally mirrors the public `profiles` row returned by the backend
+ * without importing generated database types into the Expo bundle.
+ */
+export type UserRecommendationProfile = {
+  id: string;
+  display_name: string;
+  bio: string | null;
+  avatar_url: string | null;
+  github_url: string | null;
+  skill_level: string | null;
+  availability: string | null;
+  discovery_mode: "people" | "teams" | "both";
+  tech_stack: string[];
+  interests: string[];
+  preferred_roles: string[];
+  created_at: string;
+  updated_at: string;
 };
 
 export type ProfileQueueSnapshot = {
-  current: MatchProfile | undefined;
-  next: MatchProfile | undefined;
+  current: UserRecommendationProfile | undefined;
+  next: UserRecommendationProfile | undefined;
   length: number;
   position: number;
   isReady: boolean;
@@ -24,6 +36,6 @@ export interface ProfileQueue {
   getSnapshot(): ProfileQueueSnapshot;
   advance(expectedPosition: number): void;
   reset(): void;
-  replace(profiles: readonly MatchProfile[]): void;
+  replace(profiles: readonly UserRecommendationProfile[]): void;
   subscribe(listener: () => void): () => void;
 }
