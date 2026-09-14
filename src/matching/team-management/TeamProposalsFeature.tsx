@@ -1,9 +1,8 @@
 import { Link, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { ThemedText } from '@/shared/ui/themed-text';
-import { Spacing } from '@/shared/lib/theme';
 import { listTeamProposals } from '@/matching/data-access/team-service';
 import { proposalTypeLabels } from '@/matching/data-access/team-types';
 import {
@@ -14,6 +13,7 @@ import {
   LoadingState,
   SectionHeader,
   StatusPill,
+  TeamGrid,
   TeamScreen,
   teamStyles,
 } from '@/matching/ui/TeamComponents';
@@ -42,7 +42,7 @@ export default function TeamProposalsScreen() {
       {resource.loading && !resource.data && <LoadingState />}
       {resource.error && <ErrorState message={resource.error} />}
       {resource.data && (
-        <View style={styles.list}>
+        <TeamGrid>
           {resource.data.length ? (
             resource.data.map((proposal) => {
               const yesVotes = proposal.votes.filter((vote) => vote.decision === 'accept').length;
@@ -77,10 +77,8 @@ export default function TeamProposalsScreen() {
           ) : (
             <EmptyState>No membership proposals yet.</EmptyState>
           )}
-        </View>
+        </TeamGrid>
       )}
     </TeamScreen>
   );
 }
-
-const styles = StyleSheet.create({ list: { gap: Spacing.two } });
