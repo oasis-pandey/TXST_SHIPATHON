@@ -24,9 +24,9 @@ import {
     type ProfileQueue,
 } from "@/matching/data-access/profile-queue";
 import { createReduxProfileQueue } from "@/matching/data-access/redux-profile-queue";
-import { SAMPLE_PROFILES } from "@/matching/data-access/sample-profile-queue";
 import { store } from "@/shared/data-access/store";
 import { requestUserRecommendations } from "@/matching/data-access/user-recommendation-service";
+import { useLikeDeveloper } from "@/matching/swipe/use-like-developer";
 
 const { width: screenWidth } = Dimensions.get("window");
 const SWIPE_THRESHOLD = 110;
@@ -56,6 +56,12 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     const [isSwiping, setIsSwiping] = useState(false);
     const [recommendationError, setRecommendationError] = useState<string | null>(null);
     const [recommendationRequestAttempt, setRecommendationRequestAttempt] = useState(0);
+    const {
+        clearError: clearLikeError,
+        error: likeError,
+        isSubmitting: isSubmittingLike,
+        submitLike,
+    } = useLikeDeveloper();
     const swipeInProgress = useRef(false);
     const recommendationRequestInProgress = useRef(false);
     const isInitialRecommendationRequest = useRef(true);
@@ -95,6 +101,11 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     }, [activeCard, snapshot]);
 
     const position = activeCard?.position ?? idlePosition;
+    const targetUserId = activeCard?.profile.id;
+
+    useEffect(() => {
+        clearLikeError();
+    }, [clearLikeError, targetUserId]);
 
     useEffect(() => {
         const remainingRecommendations = snapshot.length - snapshot.position;
@@ -146,6 +157,12 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
             setIsBioOpen(false);
         });
     };
+    const handleHeartLike = async () => {
+        if (!targetUserId || isSwiping || isSubmittingLike) return;
+
+        const result = await submitLike(targetUserId);
+        if (result) finishSwipe(1);
+    };
     const resetCard = () =>
         Animated.spring(position, {
             toValue: { x: 0, y: 0 },
@@ -156,6 +173,7 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
             PanResponder.create({
                 onMoveShouldSetPanResponder: (_, gesture) =>
                     !swipeInProgress.current &&
+                    !isSubmittingLike &&
                     Math.abs(gesture.dx) > 6 &&
                     Math.abs(gesture.dx) > Math.abs(gesture.dy),
                 onPanResponderMove: Animated.event(
@@ -173,7 +191,7 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                     }
                 },
             }),
-        [activeCard, position, queue],
+        [activeCard, isSubmittingLike, position, queue],
     );
     const rotation = position.x.interpolate({
         inputRange: [-screenWidth, 0, screenWidth],
@@ -292,14 +310,27 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                         </View>
                     )}
                 </View>
+                {(likeError || (activeCard && !targetUserId)) && (
+                    <View style={styles.likeMessage} accessibilityLiveRegion="polite">
+                        <Text style={styles.likeMessageText}>
+                            {likeError ??
+                                "This developer is still loading. Try again shortly."}
+                        </Text>
+                    </View>
+                )}
                 <View style={styles.actions}>
                     <ActionButton
                         label="♥"
                         color="#38BA8D"
                         size="large"
-                        onPress={() => finishSwipe(1)}
+                        onPress={handleHeartLike}
                         accessibilityLabel="Like"
-                        disabled={!activeCard || isSwiping}
+                        disabled={
+                            !activeCard ||
+                            !targetUserId ||
+                            isSwiping ||
+                            isSubmittingLike
+                        }
                     />
                     <ActionButton
                         label="×"
@@ -307,7 +338,7 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                         size="large"
                         onPress={() => finishSwipe(-1)}
                         accessibilityLabel="Discard"
-                        disabled={!activeCard || isSwiping}
+                        disabled={!activeCard || isSwiping || isSubmittingLike}
                     />
                 </View>
             </SafeAreaView>
@@ -518,6 +549,25 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
+    },
+    likeMessage: {
+        position: "absolute",
+        zIndex: 11,
+        left: 24,
+        right: 24,
+        bottom: 92,
+        alignItems: "center",
+    },
+    likeMessageText: {
+        color: "#FFFFFF",
+        backgroundColor: "rgba(52, 42, 37, 0.88)",
+        borderRadius: 14,
+        overflow: "hidden",
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        fontSize: 12,
+        fontWeight: "600",
+        textAlign: "center",
     },
     actionGroup: {
         flexDirection: "row",
