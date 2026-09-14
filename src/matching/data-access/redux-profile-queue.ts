@@ -9,36 +9,39 @@ import {
 import type { RootState } from "@/shared/data-access/store";
 
 import type {
+  DiscoverQueue,
+  DiscoverQueueSnapshot,
   UserRecommendationProfile,
   ProfileQueue,
-  ProfileQueueSnapshot,
 } from "./profile-queue";
 
 const emptyQueue = { profiles: [], position: 0 };
-const loadingSnapshot: ProfileQueueSnapshot = {
+function createLoadingSnapshot<T>(): DiscoverQueueSnapshot<T> {
+  return {
     current: undefined,
     next: undefined,
     length: 0,
     position: 0,
     isReady: false,
-};
+  };
+}
 
 /**
  * Redux adapter for one named match queue. The UI only receives the
  * ProfileQueue interface, so a mode can inject a different queue implementation.
  */
-export function createReduxProfileQueue(
+export function createReduxDiscoverQueue<T extends { id: string }>(
     store: Store<RootState>,
     queueId: string,
-): ProfileQueue {
+): DiscoverQueue<T> {
     const getQueue = () => store.getState().matching[queueId] ?? emptyQueue;
     let previousQueue = getQueue();
-    let previousSnapshot: ProfileQueueSnapshot =
+    let previousSnapshot: DiscoverQueueSnapshot<T> =
         previousQueue === emptyQueue
-            ? loadingSnapshot
+            ? createLoadingSnapshot<T>()
             : {
-                current: previousQueue.profiles[previousQueue.position],
-                next: previousQueue.profiles[previousQueue.position + 1],
+                current: previousQueue.profiles[previousQueue.position] as T | undefined,
+                next: previousQueue.profiles[previousQueue.position + 1] as T | undefined,
                 length: previousQueue.profiles.length,
                 position: previousQueue.position,
                 isReady: true,
@@ -50,8 +53,8 @@ export function createReduxProfileQueue(
 
         previousQueue = queue;
         previousSnapshot = {
-            current: queue.profiles[queue.position],
-            next: queue.profiles[queue.position + 1],
+            current: queue.profiles[queue.position] as T | undefined,
+            next: queue.profiles[queue.position + 1] as T | undefined,
             length: queue.profiles.length,
             position: queue.position,
             isReady: true,
@@ -63,11 +66,18 @@ export function createReduxProfileQueue(
     getSnapshot,
     advance: (expectedPosition) =>
       store.dispatch(advanceQueue({ queueId, expectedPosition })),
-    append: (profiles: readonly UserRecommendationProfile[]) =>
+    append: (profiles: readonly T[]) =>
       store.dispatch(appendQueue({ queueId, profiles })),
     reset: () => store.dispatch(resetQueue({ queueId })),
-    replace: (profiles: readonly UserRecommendationProfile[]) =>
+    replace: (profiles: readonly T[]) =>
       store.dispatch(replaceQueue({ queueId, profiles })),
     subscribe: (listener) => store.subscribe(listener),
   };
+}
+
+export function createReduxProfileQueue(
+  store: Store<RootState>,
+  queueId: string,
+): ProfileQueue {
+  return createReduxDiscoverQueue<UserRecommendationProfile>(store, queueId);
 }
