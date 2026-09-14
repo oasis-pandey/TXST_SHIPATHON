@@ -1,4 +1,4 @@
-import { requireSupabase } from '@/lib/supabase';
+import { requireSupabase } from '@/shared/lib/supabase';
 
 import type {
   CandidateResponse,
@@ -10,13 +10,15 @@ import type {
   TeamDraft,
   TeamMember,
   TeamWithMembership,
-} from './types';
+} from './team-types';
 
 function splitTechStack(value: string) {
-  return value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
+  return [...new Set(
+    value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
+  )];
 }
 
 export async function getCurrentUserId() {
@@ -49,6 +51,21 @@ export async function listTeams(): Promise<Team[]> {
     .order('updated_at', { ascending: false });
   if (error) throw error;
   return data ?? [];
+}
+
+export async function getTeamMemberCounts(teamIds: string[]) {
+  if (!teamIds.length) return {} as Record<string, number>;
+
+  const { data, error } = await requireSupabase()
+    .from('team_members')
+    .select('team_id')
+    .in('team_id', teamIds);
+  if (error) throw error;
+
+  return (data ?? []).reduce<Record<string, number>>((counts, membership) => {
+    counts[membership.team_id] = (counts[membership.team_id] ?? 0) + 1;
+    return counts;
+  }, {});
 }
 
 export async function getTeam(teamId: string): Promise<Team> {
@@ -121,13 +138,65 @@ export async function createProposal(
   candidateUserId: string,
   proposalType: ProposalType,
 ) {
+  const ensureApplicationConsent = async (proposalId: string) => {
+    const { data: proposal, error: proposalError } = await requireSupabase()
+      .from('team_membership_proposals')
+      .select('status, candidate_response')
+      .eq('id', proposalId)
+      .single();
+    if (proposalError) throw new Error(proposalError.message);
+
+    // This keeps applications working before the accompanying database
+    // migration is deployed. Applying is consent, so there is no second user
+    // decision in the UI.
+    if (proposal.status === 'pending' && proposal.candidate_response === 'pending') {
+      const { error: responseError } = await requireSupabase().rpc(
+        'respond_to_team_membership_proposal',
+        { p_proposal_id: proposalId, p_response: 'accepted' },
+      );
+      if (responseError) throw new Error(responseError.message);
+    }
+
+    return proposalId;
+  };
+
+  if (proposalType === 'user_swiped_team') {
+    const userId = await getCurrentUserId();
+    if (candidateUserId !== userId) {
+      throw new Error('You can only apply to a team as yourself.');
+    }
+
+    // Reopen an existing application after navigation or an interrupted request.
+    const { data: existing, error: lookupError } = await requireSupabase()
+      .from('team_membership_proposals')
+      .select('id, candidate_response')
+      .eq('team_id', teamId)
+      .eq('candidate_user_id', userId)
+      .eq('status', 'pending')
+      .maybeSingle();
+    if (lookupError) throw new Error(lookupError.message);
+    if (existing) return ensureApplicationConsent(existing.id);
+
+    // Applying is an explicit expression of interest, just like liking a team
+    // in discovery. Keep the backend prerequisite and admission checks intact.
+    const { error: likeError } = await requireSupabase().from('swipes').upsert({
+      actor_type: 'user',
+      actor_id: userId,
+      target_type: 'team',
+      target_id: teamId,
+      decision: 'like',
+      created_by_user_id: userId,
+    }, { onConflict: 'actor_type,actor_id,target_type,target_id' });
+    if (likeError) throw new Error(likeError.message);
+  }
+
   const { data, error } = await requireSupabase().rpc('create_team_membership_proposal', {
     p_team_id: teamId,
     p_candidate_user_id: candidateUserId,
     p_proposal_type: proposalType,
   });
-  if (error) throw error;
-  return data;
+  if (error) throw new Error(error.message);
+  return proposalType === 'user_swiped_team' ? ensureApplicationConsent(data) : data;
 }
 
 const proposalSelect = `
@@ -167,7 +236,32 @@ export async function getProposal(proposalId: string): Promise<ProposalWithDetai
     .eq('id', proposalId)
     .single();
   if (error) throw error;
-  return data as unknown as ProposalWithDetails;
+  const proposal = data as unknown as ProposalWithDetails;
+
+  // Repair applications created before application-as-consent was introduced.
+  // This is only attempted for the applicant who originally submitted it.
+  if (
+    proposal.proposal_type === 'user_swiped_team' &&
+    proposal.status === 'pending' &&
+    proposal.candidate_response === 'pending' &&
+    proposal.candidate_user_id === await getCurrentUserId()
+  ) {
+    const { error: responseError } = await requireSupabase().rpc(
+      'respond_to_team_membership_proposal',
+      { p_proposal_id: proposalId, p_response: 'accepted' },
+    );
+    if (responseError) throw new Error(responseError.message);
+
+    const { data: refreshed, error: refreshError } = await requireSupabase()
+      .from('team_membership_proposals')
+      .select(proposalSelect)
+      .eq('id', proposalId)
+      .single();
+    if (refreshError) throw new Error(refreshError.message);
+    return refreshed as unknown as ProposalWithDetails;
+  }
+
+  return proposal;
 }
 
 export async function isCurrentUserTeamMember(teamId: string) {

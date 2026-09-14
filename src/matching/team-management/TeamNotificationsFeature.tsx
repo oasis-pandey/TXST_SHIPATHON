@@ -1,9 +1,8 @@
 import { useCallback } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
-import { listTeamNotifications, markTeamNotificationRead } from '@/features/teams/api';
+import { ThemedText } from '@/shared/ui/themed-text';
+import { listTeamNotifications, markTeamNotificationRead } from '@/matching/data-access/team-service';
 import {
   Button,
   Card,
@@ -11,10 +10,11 @@ import {
   ErrorState,
   LoadingState,
   SectionHeader,
+  TeamGrid,
   TeamScreen,
   teamStyles,
-} from '@/features/teams/ui';
-import { useResource } from '@/features/teams/use-resource';
+} from '@/matching/ui/TeamComponents';
+import { useResource } from '@/shared/hooks/use-resource';
 
 const notificationLabels: Record<string, string> = {
   team_application_received: 'New team application',
@@ -36,7 +36,7 @@ export default function TeamNotificationsScreen() {
       {resource.loading && !resource.data && <LoadingState />}
       {resource.error && <ErrorState message={resource.error} />}
       {resource.data && (
-        <View style={styles.list}>
+        <TeamGrid>
           {resource.data.length ? (
             resource.data.map((notification) => (
               <Card key={notification.id}>
@@ -63,10 +63,8 @@ export default function TeamNotificationsScreen() {
           ) : (
             <EmptyState>No team notifications yet.</EmptyState>
           )}
-        </View>
+        </TeamGrid>
       )}
     </TeamScreen>
   );
 }
-
-const styles = StyleSheet.create({ list: { gap: Spacing.two } });

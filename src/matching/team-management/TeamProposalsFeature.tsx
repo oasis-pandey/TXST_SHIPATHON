@@ -1,11 +1,10 @@
 import { Link, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
-import { listTeamProposals } from '@/features/teams/api';
-import { proposalTypeLabels } from '@/features/teams/types';
+import { ThemedText } from '@/shared/ui/themed-text';
+import { listTeamProposals } from '@/matching/data-access/team-service';
+import { proposalTypeLabels } from '@/matching/data-access/team-types';
 import {
   Button,
   Card,
@@ -14,10 +13,11 @@ import {
   LoadingState,
   SectionHeader,
   StatusPill,
+  TeamGrid,
   TeamScreen,
   teamStyles,
-} from '@/features/teams/ui';
-import { useResource } from '@/features/teams/use-resource';
+} from '@/matching/ui/TeamComponents';
+import { useResource } from '@/shared/hooks/use-resource';
 
 export default function TeamProposalsScreen() {
   const { teamId } = useLocalSearchParams<{ teamId: string }>();
@@ -42,7 +42,7 @@ export default function TeamProposalsScreen() {
       {resource.loading && !resource.data && <LoadingState />}
       {resource.error && <ErrorState message={resource.error} />}
       {resource.data && (
-        <View style={styles.list}>
+        <TeamGrid>
           {resource.data.length ? (
             resource.data.map((proposal) => {
               const yesVotes = proposal.votes.filter((vote) => vote.decision === 'accept').length;
@@ -77,10 +77,8 @@ export default function TeamProposalsScreen() {
           ) : (
             <EmptyState>No membership proposals yet.</EmptyState>
           )}
-        </View>
+        </TeamGrid>
       )}
     </TeamScreen>
   );
 }
-
-const styles = StyleSheet.create({ list: { gap: Spacing.two } });

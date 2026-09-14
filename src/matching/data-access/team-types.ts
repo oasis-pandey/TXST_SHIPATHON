@@ -52,7 +52,7 @@ export const proposalTypeLabels: Record<ProposalType, string> = {
 
 export const proposalTypeDescriptions: Record<ProposalType, string> = {
   team_swiped_user: 'Like a developer on behalf of this team and open a proposal.',
-  user_swiped_team: 'Promote your existing user-to-team like into an application.',
+  user_swiped_team: 'Express interest in this team and send an application for member review.',
   direct_invite: 'Invite a developer directly, then collect member votes.',
   teammate_match: 'Promote your active one-to-one match into this team.',
 };

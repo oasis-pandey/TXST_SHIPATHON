@@ -1,30 +1,30 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { ThemedText } from '@/shared/ui/themed-text';
 import {
   createProposal,
   getCurrentUserId,
   isCurrentUserTeamMember,
   listProfiles,
-} from '@/features/teams/api';
+} from '@/matching/data-access/team-service';
 import {
   proposalTypeDescriptions,
   proposalTypeLabels,
   type ProposalType,
-} from '@/features/teams/types';
+} from '@/matching/data-access/team-types';
 import {
   Button,
   Card,
   ErrorState,
   LoadingState,
   SectionHeader,
+  TeamGrid,
   TeamScreen,
   teamStyles,
-} from '@/features/teams/ui';
-import { useResource } from '@/features/teams/use-resource';
+} from '@/matching/ui/TeamComponents';
+import { useResource } from '@/shared/hooks/use-resource';
 
 const teamProposalTypes: ProposalType[] = [
   'team_swiped_user',
@@ -104,14 +104,15 @@ export default function NewProposalScreen() {
         <Card>
           <ThemedText type="smallBold">Applying as the signed-in user</ThemedText>
           <ThemedText themeColor="textSecondary">
-            This path requires an existing user-to-team like created by the discovery flow.
+            Submitting records your interest in this team and sends your application for review.
+            You will still need to accept the proposal, and members must approve before you join.
           </ThemedText>
         </Card>
       )}
       {resource.data && effectiveType !== 'user_swiped_team' && (
         <>
           <SectionHeader title="Select candidate" />
-          <View style={styles.list}>
+          <TeamGrid>
             {candidates.map((profile) => (
               <Pressable key={profile.id} onPress={() => setCandidateId(profile.id)}>
                 <Card>
@@ -127,7 +128,7 @@ export default function NewProposalScreen() {
                 </Card>
               </Pressable>
             ))}
-          </View>
+          </TeamGrid>
         </>
       )}
 
@@ -142,5 +143,3 @@ export default function NewProposalScreen() {
     </TeamScreen>
   );
 }
-
-const styles = StyleSheet.create({ list: { gap: Spacing.two } });
