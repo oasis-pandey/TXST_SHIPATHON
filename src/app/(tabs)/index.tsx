@@ -1,4 +1,5 @@
 import * as Device from 'expo-device';
+import { Link } from 'expo-router';
 import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -42,6 +43,10 @@ export default function HomeScreen() {
         <ThemedText type="code" style={styles.code}>
           get started
         </ThemedText>
+
+        <Link href="/create-profile">
+          <ThemedText type="linkPrimary">Create your PairUp profile</ThemedText>
+        </Link>
 
         <ThemedView type="backgroundElement" style={styles.stepContainer}>
           <HintRow
