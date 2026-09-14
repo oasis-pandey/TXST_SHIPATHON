@@ -114,7 +114,10 @@ export default function TeamsHomeScreen() {
   }
 
   const pendingProposals = resource.data?.candidateProposals.filter(
-    (proposal) => proposal.status === 'pending',
+    (proposal) =>
+      proposal.status === 'pending' &&
+      proposal.proposal_type !== 'user_swiped_team' &&
+      proposal.candidate_response === 'pending',
   ) ?? [];
 
   return (

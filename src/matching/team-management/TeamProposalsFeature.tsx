@@ -67,7 +67,9 @@ export default function TeamProposalsScreen() {
                       </ThemedText>
                       <ThemedText themeColor="textSecondary">
                         {yesVotes} / {proposal.required_yes_votes} yes votes · candidate{' '}
-                        {proposal.candidate_response}
+                        {proposal.proposal_type === 'user_swiped_team'
+                          ? 'consent recorded; team decision pending'
+                          : proposal.candidate_response}
                       </ThemedText>
                     </Card>
                   </Pressable>
