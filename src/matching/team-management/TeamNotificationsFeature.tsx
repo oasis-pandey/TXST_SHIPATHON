@@ -1,8 +1,7 @@
 import { useCallback } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { ThemedText } from '@/shared/ui/themed-text';
-import { Spacing } from '@/shared/lib/theme';
 import { listTeamNotifications, markTeamNotificationRead } from '@/matching/data-access/team-service';
 import {
   Button,
@@ -11,6 +10,7 @@ import {
   ErrorState,
   LoadingState,
   SectionHeader,
+  TeamGrid,
   TeamScreen,
   teamStyles,
 } from '@/matching/ui/TeamComponents';
@@ -36,7 +36,7 @@ export default function TeamNotificationsScreen() {
       {resource.loading && !resource.data && <LoadingState />}
       {resource.error && <ErrorState message={resource.error} />}
       {resource.data && (
-        <View style={styles.list}>
+        <TeamGrid>
           {resource.data.length ? (
             resource.data.map((notification) => (
               <Card key={notification.id}>
@@ -63,10 +63,8 @@ export default function TeamNotificationsScreen() {
           ) : (
             <EmptyState>No team notifications yet.</EmptyState>
           )}
-        </View>
+        </TeamGrid>
       )}
     </TeamScreen>
   );
 }
-
-const styles = StyleSheet.create({ list: { gap: Spacing.two } });

@@ -78,7 +78,9 @@ export default function ProposalReviewScreen() {
             </ThemedText>
             <Chips values={proposal.candidate?.tech_stack ?? []} />
             <ThemedText themeColor="textSecondary">
-              Candidate response: {proposal.candidate_response}
+              {proposal.proposal_type === 'user_swiped_team'
+                ? 'Applicant consent: given when they applied'
+                : `Candidate response: ${proposal.candidate_response}`}
             </ThemedText>
           </Card>
 
@@ -93,12 +95,20 @@ export default function ProposalReviewScreen() {
             {resource.data.member && proposal.status === 'pending' && (
               <View style={teamStyles.actions}>
                 <Button
-                  label={currentVote?.decision === 'accept' ? 'Voted yes' : 'Vote yes'}
+                  label={currentVote?.decision === 'accept'
+                    ? 'Accepted'
+                    : proposal.proposal_type === 'user_swiped_team'
+                      ? 'Accept applicant'
+                      : 'Vote yes'}
                   onPress={() => void runAction(() => castProposalVote(proposalId, 'accept'))}
                   disabled={saving}
                 />
                 <Button
-                  label={currentVote?.decision === 'reject' ? 'Voted no' : 'Vote no'}
+                  label={currentVote?.decision === 'reject'
+                    ? 'Rejected'
+                    : proposal.proposal_type === 'user_swiped_team'
+                      ? 'Reject applicant'
+                      : 'Vote no'}
                   tone="danger"
                   onPress={() => void runAction(() => castProposalVote(proposalId, 'reject'))}
                   disabled={saving}
@@ -107,7 +117,10 @@ export default function ProposalReviewScreen() {
             )}
           </Card>
 
-          {isCandidate && proposal.status === 'pending' && proposal.candidate_response === 'pending' && (
+          {isCandidate &&
+            proposal.proposal_type !== 'user_swiped_team' &&
+            proposal.status === 'pending' &&
+            proposal.candidate_response === 'pending' && (
             <>
               <SectionHeader title="Your response" />
               <Card>
