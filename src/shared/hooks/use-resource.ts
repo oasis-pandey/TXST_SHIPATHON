@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+
+function errorMessage(cause: unknown) {
+  // Supabase database errors are plain objects, not always Error instances.
+  if (cause && typeof cause === 'object' && 'message' in cause &&
+      typeof cause.message === 'string') return cause.message;
+  return 'Unable to load teams. Check your connection and try again.';
+}
 
 export function useResource<T>(loader: () => Promise<T>) {
   const [data, setData] = useState<T | null>(null);
@@ -11,14 +19,17 @@ export function useResource<T>(loader: () => Promise<T>) {
     try {
       setData(await loader());
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Something went wrong.');
+      setError(errorMessage(cause));
     } finally {
       setLoading(false);
     }
   }, [loader]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let active = true;
+
+    setLoading(true);
+    setError(null);
 
     loader()
       .then((value) => {
@@ -26,7 +37,7 @@ export function useResource<T>(loader: () => Promise<T>) {
       })
       .catch((cause: unknown) => {
         if (active) {
-          setError(cause instanceof Error ? cause.message : 'Something went wrong.');
+          setError(errorMessage(cause));
         }
       })
       .finally(() => {
@@ -36,7 +47,7 @@ export function useResource<T>(loader: () => Promise<T>) {
     return () => {
       active = false;
     };
-  }, [loader]);
+  }, [loader]));
 
   return { data, error, loading, refresh };
 }

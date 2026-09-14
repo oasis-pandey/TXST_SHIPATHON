@@ -1,9 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { ThemedText } from '@/shared/ui/themed-text';
-import { Spacing } from '@/shared/lib/theme';
 import {
   createProposal,
   getCurrentUserId,
@@ -21,6 +20,7 @@ import {
   ErrorState,
   LoadingState,
   SectionHeader,
+  TeamGrid,
   TeamScreen,
   teamStyles,
 } from '@/matching/ui/TeamComponents';
@@ -104,14 +104,15 @@ export default function NewProposalScreen() {
         <Card>
           <ThemedText type="smallBold">Applying as the signed-in user</ThemedText>
           <ThemedText themeColor="textSecondary">
-            This path requires an existing user-to-team like created by the discovery flow.
+            Submitting records your interest in this team and sends your application for review.
+            You will still need to accept the proposal, and members must approve before you join.
           </ThemedText>
         </Card>
       )}
       {resource.data && effectiveType !== 'user_swiped_team' && (
         <>
           <SectionHeader title="Select candidate" />
-          <View style={styles.list}>
+          <TeamGrid>
             {candidates.map((profile) => (
               <Pressable key={profile.id} onPress={() => setCandidateId(profile.id)}>
                 <Card>
@@ -127,7 +128,7 @@ export default function NewProposalScreen() {
                 </Card>
               </Pressable>
             ))}
-          </View>
+          </TeamGrid>
         </>
       )}
 
@@ -142,5 +143,3 @@ export default function NewProposalScreen() {
     </TeamScreen>
   );
 }
-
-const styles = StyleSheet.create({ list: { gap: Spacing.two } });
