@@ -7,6 +7,10 @@ import type { Database } from '@/shared/types/database.types';
 
 let client: SupabaseClient<Database> | undefined;
 
+export const isSupabaseConfigured = Boolean(
+  process.env.EXPO_PUBLIC_SUPABASE_URL && process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+);
+
 export function getSupabase() {
   if (client) return client;
   const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -31,4 +35,8 @@ export function getSupabase() {
   }
   client = instance;
   return client;
+}
+
+export function requireSupabase() {
+  return getSupabase();
 }
