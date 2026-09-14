@@ -37,7 +37,7 @@ export function CreateProfileFeature() {
         });
         const profile = await getMyProfile();
         if (!active) return;
-        if (profile) router.replace('/');
+        if (profile) router.replace('/(tabs)/index');
         else setReady(true);
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : 'Could not load your profile.');
@@ -60,7 +60,7 @@ export function CreateProfileFeature() {
     setSubmitting(true);
     try {
       await createProfile(input);
-      if (activeScreen.current) router.replace('/');
+      if (activeScreen.current) router.replace('/(tabs)/index');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save your profile. Please try again.');
     } finally {
