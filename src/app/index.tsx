@@ -252,7 +252,6 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
               <ProfileCard
                 profile={activeCard.profile}
                 expanded={isBioOpen}
-                onMore={() => setIsBioOpen((value) => !value)}
               />
             </Animated.View>
           ) : !snapshot.isReady ? (
@@ -319,12 +318,10 @@ function ProfileCard({
   profile,
   style,
   expanded = false,
-  onMore,
 }: {
   profile: MatchProfile;
   style?: object;
   expanded?: boolean;
-  onMore?: () => void;
 }) {
   return (
     <View style={[styles.cardInner, style]}>
@@ -339,13 +336,6 @@ function ProfileCard({
           <Text style={styles.name}>
             {profile.name}, {profile.age}
           </Text>
-          <Pressable
-            onPress={onMore}
-            style={styles.infoButton}
-            accessibilityLabel="View profile details"
-          >
-            <Text style={styles.infoIcon}>i</Text>
-          </Pressable>
         </View>
         <Text style={styles.distance}>● {profile.distance}</Text>
         <View style={styles.tags}>
@@ -482,15 +472,6 @@ const styles = StyleSheet.create({
     lineHeight: 36,
     letterSpacing: -1,
     fontWeight: "700",
-  },
-  infoButton: {
-    width: 25,
-    height: 25,
-    borderRadius: 13,
-    borderWidth: 1.5,
-    borderColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
   },
   infoIcon: { color: "#fff", fontWeight: "800", fontSize: 15 },
   distance: { color: "#F8F4F1", fontSize: 13, marginTop: 6, fontWeight: "600" },
