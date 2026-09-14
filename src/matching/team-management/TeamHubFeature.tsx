@@ -9,7 +9,6 @@ import {
   listCandidateProposals,
   listMyTeams,
   listTeamNotifications,
-  listTeams,
 } from '@/matching/data-access/team-service';
 import type { Team, TeamWithMembership } from '@/matching/data-access/team-types';
 import {
@@ -33,7 +32,6 @@ import { isSupabaseConfigured } from '@/shared/lib/supabase';
 
 type TeamsHomeData = {
   mine: TeamWithMembership[];
-  discoverable: Team[];
   candidateProposals: Awaited<ReturnType<typeof listCandidateProposals>>;
   memberCounts: Record<string, number>;
   unreadNotifications: number;
@@ -81,18 +79,15 @@ function TeamCard({
 
 export default function TeamsHomeScreen() {
   const loader = useCallback(async (): Promise<TeamsHomeData> => {
-    const [mine, teams, candidateProposals, notifications] = await Promise.all([
+    const [mine, candidateProposals, notifications] = await Promise.all([
       listMyTeams(),
-      listTeams(),
       listCandidateProposals(),
       listTeamNotifications(),
     ]);
-    const memberCounts = await getTeamMemberCounts(teams.map((team) => team.id));
-    const mineIds = new Set(mine.map((team) => team.id));
+    const memberCounts = await getTeamMemberCounts(mine.map((team) => team.id));
 
     return {
       mine,
-      discoverable: teams.filter((team) => !mineIds.has(team.id)),
       candidateProposals,
       memberCounts,
       unreadNotifications: notifications.filter((notification) => !notification.read).length,
@@ -127,9 +122,14 @@ export default function TeamsHomeScreen() {
         title="Build your crew"
         description="Keep your current teams organized, handle invitations, and find the right project to join."
         action={
-          <Link href="/teams/new" asChild>
-            <Button label="Create a team" onPress={() => {}} />
-          </Link>
+          <View style={styles.heroActions}>
+            <Link href="/teams/find" asChild>
+              <Button label="Find a team" onPress={() => {}} />
+            </Link>
+            <Link href="/teams/new" asChild>
+              <Button label="Create a team" tone="secondary" onPress={() => {}} />
+            </Link>
+          </View>
         }
       />
 
@@ -220,27 +220,7 @@ export default function TeamsHomeScreen() {
                 ))}
               </TeamGrid>
             ) : (
-              <EmptyState>You are not on a team yet. Create one or explore open teams below.</EmptyState>
-            )}
-          </View>
-
-          <View style={styles.section}>
-            <SectionHeader title="Looking for a team" />
-            <ThemedText themeColor="textSecondary" style={styles.sectionCopy}>
-              Explore teams you have not joined yet. Open a card to learn more and apply.
-            </ThemedText>
-            {resource.data.discoverable.length ? (
-              <TeamGrid>
-                {resource.data.discoverable.map((team) => (
-                  <TeamCard
-                    key={team.id}
-                    team={team}
-                    memberCount={resource.data!.memberCounts[team.id] ?? 0}
-                  />
-                ))}
-              </TeamGrid>
-            ) : (
-              <EmptyState>No other teams are available right now.</EmptyState>
+              <EmptyState>You are not on a team yet. Find one to join or create your own.</EmptyState>
             )}
           </View>
         </>
@@ -252,8 +232,8 @@ export default function TeamsHomeScreen() {
 const styles = StyleSheet.create({
   summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   toolbar: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  heroActions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   section: { gap: Spacing.three },
-  sectionCopy: { marginTop: -Spacing.two, maxWidth: 680 },
   teamCard: { minHeight: 250 },
   teamHeading: { flex: 1, gap: Spacing.one },
   cardTitle: { flex: 1, fontSize: 20, lineHeight: 26, fontWeight: '700' },

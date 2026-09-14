@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
 import { StatusBar } from "expo-status-bar";
 import {
+    type ReactNode,
     useEffect,
     useLayoutEffect,
     useMemo,
@@ -20,11 +21,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
+    type DiscoverQueue,
     type UserRecommendationProfile,
-    type ProfileQueue,
 } from "@/matching/data-access/profile-queue";
 import { createReduxProfileQueue } from "@/matching/data-access/redux-profile-queue";
-import { SAMPLE_PROFILES } from "@/matching/data-access/sample-profile-queue";
 import { store } from "@/shared/data-access/store";
 import { requestUserRecommendations } from "@/matching/data-access/user-recommendation-service";
 
@@ -32,8 +32,8 @@ const { width: screenWidth } = Dimensions.get("window");
 const SWIPE_THRESHOLD = 110;
 const MINIMUM_REMAINING_RECOMMENDATIONS = 3;
 
-type ActiveCard = {
-    profile: UserRecommendationProfile;
+type ActiveCard<T> = {
+    profile: T;
     queuePosition: number;
     position: Animated.ValueXY;
 };
@@ -43,10 +43,70 @@ export function DiscoverFeature() {
         () => createReduxProfileQueue(store, "default-discover"),
         [],
     );
-    return <DiscoverView queue={queue} />;
+    const recommendations = useUserRecommendations(queue);
+
+    return (
+        <DiscoverView
+            queue={queue}
+            renderCard={(profile, expanded) => <ProfileCard profile={profile} expanded={expanded} />}
+            loadingMessage="Finding people nearby…"
+            emptyCopy="New people will appear here when they&apos;re nearby."
+            error={recommendations.error}
+            onRetry={recommendations.retry}
+        />
+    );
 }
 
-export function DiscoverView({ queue }: { queue: ProfileQueue }) {
+function useUserRecommendations(queue: DiscoverQueue<UserRecommendationProfile>) {
+    const snapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot, queue.getSnapshot);
+    const [error, setError] = useState<string | null>(null);
+    const [attempt, setAttempt] = useState(0);
+    const requestInProgress = useRef(false);
+    const isInitialRequest = useRef(true);
+
+    useEffect(() => {
+        const remainingRecommendations = snapshot.length - snapshot.position;
+        const shouldRequestRecommendations =
+            isInitialRequest.current || remainingRecommendations < MINIMUM_REMAINING_RECOMMENDATIONS;
+        if (!shouldRequestRecommendations || requestInProgress.current) return;
+
+        requestInProgress.current = true;
+        void requestUserRecommendations()
+            .then((profiles) => {
+                if (isInitialRequest.current) {
+                    queue.replace(profiles);
+                    isInitialRequest.current = false;
+                } else {
+                    queue.append(profiles);
+                }
+                setError(null);
+            })
+            .catch((cause: unknown) => {
+                setError(cause instanceof Error ? cause.message : "Could not load recommendations.");
+            })
+            .finally(() => {
+                requestInProgress.current = false;
+            });
+    }, [attempt, queue, snapshot.length, snapshot.position]);
+
+    return { error, retry: () => setAttempt((value) => value + 1) };
+}
+
+export function DiscoverView<T extends { id: string }>({
+    queue,
+    renderCard,
+    loadingMessage,
+    emptyCopy,
+    error,
+    onRetry,
+}: {
+    queue: DiscoverQueue<T>;
+    renderCard: (item: T, expanded: boolean) => ReactNode;
+    loadingMessage: string;
+    emptyCopy: string;
+    error?: string | null;
+    onRetry?: () => void;
+}) {
     const snapshot = useSyncExternalStore(
         queue.subscribe,
         queue.getSnapshot,
@@ -54,13 +114,9 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     );
     const [isBioOpen, setIsBioOpen] = useState(true);
     const [isSwiping, setIsSwiping] = useState(false);
-    const [recommendationError, setRecommendationError] = useState<string | null>(null);
-    const [recommendationRequestAttempt, setRecommendationRequestAttempt] = useState(0);
     const swipeInProgress = useRef(false);
-    const recommendationRequestInProgress = useRef(false);
-    const isInitialRecommendationRequest = useRef(true);
     const idlePosition = useRef(new Animated.ValueXY()).current;
-    const [activeCard, setActiveCard] = useState<ActiveCard | undefined>(() =>
+    const [activeCard, setActiveCard] = useState<ActiveCard<T> | undefined>(() =>
         snapshot.current
             ? {
                 profile: snapshot.current,
@@ -95,35 +151,6 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     }, [activeCard, snapshot]);
 
     const position = activeCard?.position ?? idlePosition;
-
-    useEffect(() => {
-        const remainingRecommendations = snapshot.length - snapshot.position;
-        const shouldRequestRecommendations =
-            isInitialRecommendationRequest.current ||
-            remainingRecommendations < MINIMUM_REMAINING_RECOMMENDATIONS;
-
-        if (!shouldRequestRecommendations || recommendationRequestInProgress.current) return;
-
-        recommendationRequestInProgress.current = true;
-        void requestUserRecommendations()
-            .then((profiles) => {
-                if (isInitialRecommendationRequest.current) {
-                    queue.replace(profiles);
-                    isInitialRecommendationRequest.current = false;
-                } else {
-                    queue.append(profiles);
-                }
-                setRecommendationError(null);
-            })
-            .catch((cause: unknown) => {
-                setRecommendationError(
-                    cause instanceof Error ? cause.message : "Could not load recommendations.",
-                );
-            })
-            .finally(() => {
-                recommendationRequestInProgress.current = false;
-            });
-    }, [queue, recommendationRequestAttempt, snapshot.length, snapshot.position]);
 
     const finishSwipe = (direction: 1 | -1) => {
         if (!activeCard || swipeInProgress.current) return;
@@ -223,7 +250,7 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                                 },
                             ]}
                         >
-                            <ProfileCard profile={snapshot.next} />
+                            {renderCard(snapshot.next, false)}
                         </Animated.View>
                     )}
                     {activeCard ? (
@@ -258,20 +285,17 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                             >
                                 LIKE
                             </Animated.Text>
-                            <ProfileCard
-                                profile={activeCard.profile}
-                                expanded={isBioOpen}
-                            />
+                            {renderCard(activeCard.profile, isBioOpen)}
                         </Animated.View>
                     ) : !snapshot.isReady ? (
                         <View style={styles.loadingState}>
-                            <Text style={styles.loadingText}>Finding people nearby…</Text>
-                            {recommendationError && (
+                            <Text style={styles.loadingText}>{loadingMessage}</Text>
+                            {error && (
                                 <>
-                                    <Text style={styles.errorText}>{recommendationError}</Text>
+                                    <Text style={styles.errorText}>{error}</Text>
                                     <Pressable
                                         accessibilityRole="button"
-                                        onPress={() => setRecommendationRequestAttempt((attempt) => attempt + 1)}
+                                        onPress={onRetry}
                                     >
                                         <Text style={styles.refreshText}>Try again</Text>
                                     </Pressable>
@@ -283,12 +307,12 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                             <Text style={styles.emptyEmoji}>✨</Text>
                             <Text style={styles.emptyTitle}>You&apos;re all caught up</Text>
                             <Text style={styles.emptyCopy}>
-                                New people will appear here when they&apos;re nearby.
+                                {emptyCopy}
                             </Text>
                             <Pressable style={styles.refreshButton} onPress={queue.reset}>
                                 <Text style={styles.refreshText}>Start over</Text>
                             </Pressable>
-                            {recommendationError && <Text style={styles.errorText}>{recommendationError}</Text>}
+                            {error && <Text style={styles.errorText}>{error}</Text>}
                         </View>
                     )}
                 </View>
@@ -324,9 +348,39 @@ function ProfileCard({
     expanded?: boolean;
 }) {
     return (
+        <DiscoverCard
+            imageUrl={profile.avatar_url}
+            title={profile.display_name}
+            subtitle={[profile.skill_level, profile.availability].filter(Boolean).join(" · ") || "Developer"}
+            tags={[...(profile.tech_stack ?? []), ...(profile.preferred_roles ?? [])]}
+            description={profile.bio}
+            expanded={expanded}
+            style={style}
+        />
+    );
+}
+
+export function DiscoverCard({
+    imageUrl,
+    title,
+    subtitle,
+    tags,
+    description,
+    expanded = false,
+    style,
+}: {
+    imageUrl?: string | null;
+    title: string;
+    subtitle: string;
+    tags: readonly string[];
+    description?: string | null;
+    expanded?: boolean;
+    style?: object;
+}) {
+    return (
         <View style={[styles.cardInner, style]}>
             <Image
-                source={{ uri: profile.avatar_url ?? "https://placehold.co/1100x1600/png" }}
+                source={{ uri: imageUrl ?? "https://placehold.co/1100x1600/png" }}
                 style={styles.photo}
                 contentFit="cover"
             />
@@ -334,20 +388,20 @@ function ProfileCard({
             <View style={styles.cardContent}>
                 <View style={styles.nameRow}>
                     <Text style={styles.name}>
-                        {profile.display_name}
+                        {title}
                     </Text>
                 </View>
                 <Text style={styles.distance}>
-                    ● {[profile.skill_level, profile.availability].filter(Boolean).join(" · ") || "Developer"}
+                    ● {subtitle}
                 </Text>
                 <View style={styles.tags}>
-                    {[...(profile.tech_stack ?? []), ...(profile.preferred_roles ?? [])].map((tag) => (
+                    {tags.map((tag) => (
                         <View key={tag} style={styles.tag}>
                             <Text style={styles.tagText}>{tag}</Text>
                         </View>
                     ))}
                 </View>
-                {expanded && profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
+                {expanded && description && <Text style={styles.bio}>{description}</Text>}
             </View>
         </View>
     );

@@ -25,6 +25,7 @@ export default function TeamsLayout() {
   return (
     <Stack>
       <Stack.Screen name="index" options={{ title: 'Teams' }} />
+      <Stack.Screen name="find" options={{ title: 'Find a team', ...backToTeams }} />
       <Stack.Screen name="new" options={{ title: 'Create team', ...backToTeams }} />
       <Stack.Screen name="notifications" options={{ title: 'Team notifications', ...backToTeams }} />
       <Stack.Screen name="[teamId]/index" options={{ title: 'Team', ...backToTeams }} />
