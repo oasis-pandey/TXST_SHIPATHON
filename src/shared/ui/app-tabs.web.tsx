@@ -10,10 +10,13 @@ import { Pressable, View, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/shared/ui/themed-text';
 import { ThemedView } from '@/shared/ui/themed-view';
+import { useAuth } from '@/users/data-access/auth-context';
 
 import { MaxContentWidth, Spacing } from '@/shared/lib/theme';
 
 export default function AppTabs() {
+  const { signOut } = useAuth();
+
   return (
     <Tabs>
       <TabSlot style={{ height: '100%' }} />
@@ -25,9 +28,15 @@ export default function AppTabs() {
           <TabTrigger name="teams" href="/teams" asChild>
             <TabButton>Teams</TabButton>
           </TabTrigger>
-          <TabTrigger name="logout" href="/logout" asChild>
-            <TabButton>Logout</TabButton>
-          </TabTrigger>
+          <Pressable
+            accessibilityLabel="Logout"
+            accessibilityRole="button"
+            onPress={() => void signOut()}
+            style={({ pressed }) => pressed && styles.pressed}>
+            <ThemedView type="backgroundElement" style={styles.tabButtonView}>
+              <ThemedText type="small" themeColor="textSecondary">Logout</ThemedText>
+            </ThemedView>
+          </Pressable>
         </CustomTabList>
       </TabList>
     </Tabs>
