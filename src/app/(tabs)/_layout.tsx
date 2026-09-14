@@ -1,1 +1,1 @@
-export { default } from '@/app/app-tabs';
+export { default } from '@/shared/ui/app-tabs';
