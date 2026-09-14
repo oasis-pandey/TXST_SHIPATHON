@@ -89,10 +89,20 @@ export default function TeamsHomeScreen() {
     ]);
     const memberCounts = await getTeamMemberCounts(teams.map((team) => team.id));
     const mineIds = new Set(mine.map((team) => team.id));
+    const pendingApplicationTeamIds = new Set(
+      candidateProposals
+        .filter(
+          (proposal) =>
+            proposal.proposal_type === 'user_swiped_team' && proposal.status === 'pending',
+        )
+        .map((proposal) => proposal.team_id),
+    );
 
     return {
       mine,
-      discoverable: teams.filter((team) => !mineIds.has(team.id)),
+      discoverable: teams.filter(
+        (team) => !mineIds.has(team.id) && !pendingApplicationTeamIds.has(team.id),
+      ),
       candidateProposals,
       memberCounts,
       unreadNotifications: notifications.filter((notification) => !notification.read).length,
@@ -118,6 +128,10 @@ export default function TeamsHomeScreen() {
       proposal.status === 'pending' &&
       proposal.proposal_type !== 'user_swiped_team' &&
       proposal.candidate_response === 'pending',
+  ) ?? [];
+  const pendingApplications = resource.data?.candidateProposals.filter(
+    (proposal) =>
+      proposal.status === 'pending' && proposal.proposal_type === 'user_swiped_team',
   ) ?? [];
 
   return (
@@ -146,6 +160,7 @@ export default function TeamsHomeScreen() {
         <>
           <View style={styles.summaryRow}>
             <Metric label="current teams" value={resource.data.mine.length} />
+            <Metric label="pending applications" value={pendingApplications.length} />
             <Metric label="needs your response" value={pendingProposals.length} />
             <Metric label="unread updates" value={resource.data.unreadNotifications} />
           </View>
@@ -190,6 +205,44 @@ export default function TeamsHomeScreen() {
                         </View>
                         <ThemedText themeColor="textSecondary">
                           Review this membership request and choose whether you want to join.
+                        </ThemedText>
+                      </Card>
+                    </Pressable>
+                  </Link>
+                ))}
+              </TeamGrid>
+            </View>
+          )}
+
+          {pendingApplications.length > 0 && (
+            <View style={styles.section}>
+              <SectionHeader title="Your pending applications" />
+              <ThemedText themeColor="textSecondary" style={styles.sectionCopy}>
+                These teams are reviewing your request. Existing team members make the final decision.
+              </ThemedText>
+              <TeamGrid>
+                {pendingApplications.map((proposal) => (
+                  <Link
+                    key={proposal.id}
+                    href={{
+                      pathname: '/teams/[teamId]/proposals/[proposalId]',
+                      params: { teamId: proposal.team_id, proposalId: proposal.id },
+                    }}
+                    asChild>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open pending application for ${proposal.team?.name ?? 'team'}`}
+                      style={({ pressed }) => pressed && styles.pressed}>
+                      <Card style={styles.applicationCard}>
+                        <View style={teamStyles.spread}>
+                          <ThemedText style={styles.cardTitle} numberOfLines={1}>
+                            {proposal.team?.name ?? 'Team application'}
+                          </ThemedText>
+                          <StatusPill value={proposal.status} />
+                        </View>
+                        <ThemedText type="smallBold">Application submitted</ThemedText>
+                        <ThemedText themeColor="textSecondary">
+                          Waiting for the team&apos;s membership vote.
                         </ThemedText>
                       </Card>
                     </Pressable>
@@ -262,5 +315,6 @@ const styles = StyleSheet.create({
   summary: { lineHeight: 21 },
   cardFooter: { marginTop: 'auto' },
   attentionCard: { minHeight: 130, borderColor: 'rgba(224, 155, 61, 0.35)' },
+  applicationCard: { minHeight: 140, borderColor: 'rgba(60, 135, 247, 0.4)' },
   pressed: { opacity: 0.72, transform: [{ scale: 0.99 }] },
 });
