@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { ThemedText } from '@/shared/ui/themed-text';
+import { Spacing } from '@/shared/lib/theme';
+import { useTheme } from '@/shared/hooks/use-theme';
 
 const emptyValues = {
   display_name: '', bio: '', github_url: '', skill_level: '', availability: '',

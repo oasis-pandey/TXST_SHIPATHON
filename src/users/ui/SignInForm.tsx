@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { ThemedText } from '@/components/themed-text';
-import { useTheme } from '@/hooks/use-theme';
+import { ThemedText } from '@/shared/ui/themed-text';
+import { useTheme } from '@/shared/hooks/use-theme';
 
 export function SignInForm({ onSubmit, submitting, error }: {
   onSubmit: (email: string, password: string) => void;

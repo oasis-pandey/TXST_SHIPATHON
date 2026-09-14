@@ -1,4 +1,4 @@
-import { CreateProfileFeature } from '@/users/features/create-profile/CreateProfileFeature';
+import { CreateProfileFeature } from '@/users/create-profile/CreateProfileFeature';
 
 export default function CreateProfileScreen() {
   return <CreateProfileFeature />;

@@ -2,13 +2,13 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useColorScheme } from 'react-native';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import { AuthGate } from '@/components/auth-gate';
-import { AuthProvider, useAuth } from '@/users/data/auth-context';
+import { AnimatedSplashOverlay } from '@/shared/ui/animated-icon';
+import { AuthGate } from '@/users/ui/AuthGate';
+import { AuthProvider, useAuth } from '@/users/data-access/auth-context';
 import { Provider } from "react-redux";
 
-import AppTabs from "@/components/app-tabs";
-import { store } from "@/store/store";
+import AppTabs from "@/app/app-tabs";
+import { store } from "@/app/store";
 
 SplashScreen.preventAutoHideAsync();
 

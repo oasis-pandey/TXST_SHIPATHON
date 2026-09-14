@@ -1,4 +1,4 @@
-import { SignInFeature } from '@/users/features/sign-in/SignInFeature';
+import { SignInFeature } from '@/users/sign-in/SignInFeature';
 
 export default function SignInScreen() {
   return <SignInFeature />;
