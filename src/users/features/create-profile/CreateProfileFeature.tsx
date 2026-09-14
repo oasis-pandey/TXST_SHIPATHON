@@ -6,13 +6,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { observeSession } from '@/users/data/auth-service';
+import { useAuth } from '@/users/data/auth-context';
 import { createProfile, getMyProfile } from '@/users/data/profile-service';
 import { normalizeProfile, validateProfile } from '@/users/data/profile-types';
 import { CreateProfileForm, type ProfileFormValues } from '@/users/ui/CreateProfileForm';
 
 export function CreateProfileFeature() {
   const router = useRouter();
+  const { refreshProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [ready, setReady] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -25,16 +26,8 @@ export function CreateProfileFeature() {
   useEffect(() => {
     let active = true;
     activeScreen.current = true;
-    let unsubscribe: (() => void) | undefined;
     async function load() {
       try {
-        unsubscribe = observeSession(signedIn => {
-          if (!signedIn && active) {
-            activeScreen.current = false;
-            setReady(false);
-            router.replace('/sign-in');
-          }
-        });
         const profile = await getMyProfile();
         if (!active) return;
         if (profile) router.replace('/');
@@ -46,7 +39,7 @@ export function CreateProfileFeature() {
       }
     }
     void load();
-    return () => { active = false; activeScreen.current = false; unsubscribe?.(); };
+    return () => { active = false; activeScreen.current = false; };
   }, [attempt, router]);
 
   async function submit(values: ProfileFormValues) {
@@ -60,6 +53,7 @@ export function CreateProfileFeature() {
     setSubmitting(true);
     try {
       await createProfile(input);
+      await refreshProfile();
       if (activeScreen.current) router.replace('/');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save your profile. Please try again.');
