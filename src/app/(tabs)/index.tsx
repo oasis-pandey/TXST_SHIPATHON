@@ -1,6 +1,7 @@
 import * as Device from 'expo-device';
 import { Link } from 'expo-router';
-import { Platform, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { Platform, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedIcon } from '@/components/animated-icon';
@@ -9,6 +10,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useAuth } from '@/users/data/auth-context';
 
 function getDevMenuHint() {
   if (Platform.OS === 'web') {
@@ -30,6 +32,23 @@ function getDevMenuHint() {
 }
 
 export default function HomeScreen() {
+  const { signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    setError(null);
+    try {
+      await signOut();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not sign out. Please try again.');
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -47,6 +66,10 @@ export default function HomeScreen() {
         <Link href="/create-profile">
           <ThemedText type="linkPrimary">Create your PairUp profile</ThemedText>
         </Link>
+        {error && <ThemedText accessibilityRole="alert">{error}</ThemedText>}
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled: signingOut, busy: signingOut }} disabled={signingOut} onPress={() => void handleSignOut()}>
+          <ThemedText type="linkPrimary">{signingOut ? 'Signing out...' : 'Sign out'}</ThemedText>
+        </Pressable>
 
         <ThemedView type="backgroundElement" style={styles.stepContainer}>
           <HintRow
