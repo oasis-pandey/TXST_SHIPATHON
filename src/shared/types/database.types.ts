@@ -365,7 +365,38 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cast_team_membership_vote: {
+        Args: { p_decision: string; p_proposal_id: string }
+        Returns: boolean
+      }
+      create_team_membership_proposal: {
+        Args: {
+          p_candidate_user_id: string
+          p_proposal_type: string
+          p_team_id: string
+        }
+        Returns: string
+      }
+      create_team_with_creator: {
+        Args: {
+          p_creator_role?: string
+          p_description?: string
+          p_max_members?: number
+          p_name: string
+          p_project_idea?: string
+          p_repo_url?: string
+          p_tech_stack?: string[]
+        }
+        Returns: string
+      }
+      finalize_team_membership_proposal: {
+        Args: { p_proposal_id: string }
+        Returns: boolean
+      }
+      respond_to_team_membership_proposal: {
+        Args: { p_proposal_id: string; p_response: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
