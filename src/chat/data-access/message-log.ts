@@ -6,8 +6,20 @@ import type { Message, MessageStatus } from './chat-types';
  * decided in one place instead of inside a component.
  */
 
-/** Oldest first. `created_at` comes from the database; id breaks exact ties. */
+/**
+ * Oldest first. `created_at` comes from the database; id breaks exact ties.
+ *
+ * A message that is not yet persisted is always sorted last: its timestamp
+ * comes from the device clock, which can be behind the server and would
+ * otherwise drop the outgoing bubble into the middle of the log. This covers
+ * 'failed' as well as 'pending', so a send that fails keeps its position
+ * instead of jumping when the status changes.
+ */
 export function compareMessages(a: Message, b: Message) {
+  const aUnsent = a.status !== 'sent';
+  const bUnsent = b.status !== 'sent';
+  if (aUnsent !== bUnsent) return aUnsent ? 1 : -1;
+
   if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
   if (a.id === b.id) return 0;
   return a.id < b.id ? -1 : 1;

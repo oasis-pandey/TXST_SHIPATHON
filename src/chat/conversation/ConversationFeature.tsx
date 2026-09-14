@@ -68,6 +68,7 @@ function ConversationView({ conversationId }: { conversationId: string }) {
   // Callbacks that outlive a render (realtime, focus) read the log from here.
   const messagesRef = useRef<Message[]>([]);
   const loadedRef = useRef(false);
+  const focusedRef = useRef(false);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -121,7 +122,10 @@ function ConversationView({ conversationId }: { conversationId: string }) {
       onMessage: (message) => {
         if (message.conversationId !== conversationId) return;
         setMessages((current) => mergeMessages(current, [message]));
-        void markConversationRead(conversationId).catch(() => {});
+        // Only mark read if the user is actually looking at the screen. The
+        // stack keeps this mounted behind other tabs, and marking read there
+        // would mean the unread badge never appears.
+        if (focusedRef.current) void markConversationRead(conversationId).catch(() => {});
       },
       onStatus: setRealtimeStatus,
       onResync: () => void catchUp(),
@@ -131,10 +135,20 @@ function ConversationView({ conversationId }: { conversationId: string }) {
   }, [catchUp, conversationId]);
 
   // First focus loads history; every later focus only pulls what was missed.
+  // Returning to the screen also clears whatever arrived while it was hidden.
   useFocusEffect(useCallback(() => {
-    if (loadedRef.current) void catchUp();
-    else void load();
-  }, [catchUp, load]));
+    focusedRef.current = true;
+    if (loadedRef.current) {
+      void catchUp();
+      void markConversationRead(conversationId).catch(() => {});
+    } else {
+      void load();
+    }
+
+    return () => {
+      focusedRef.current = false;
+    };
+  }, [catchUp, conversationId, load]));
 
   const loadOlder = useCallback(async () => {
     const oldest = messagesRef.current.find((message) => message.status === 'sent');
@@ -162,6 +176,13 @@ function ConversationView({ conversationId }: { conversationId: string }) {
       );
       setMessages((current) => mergeMessages(current, [saved]));
     } catch (cause) {
+      // The send may have committed and only the response been lost, in which
+      // case the realtime echo already replaced the optimistic row. Reporting a
+      // failure under a visibly delivered message would just be wrong.
+      const delivered = messagesRef.current.some((message) =>
+        message.status === 'sent' && message.clientMessageId === optimistic.clientMessageId);
+      if (delivered) return;
+
       setMessages((current) => markMessageStatus(current, optimistic.id, 'failed'));
       setSendError(messageOf(cause, 'Could not send that message.'));
     }
@@ -219,7 +240,9 @@ function ConversationView({ conversationId }: { conversationId: string }) {
             <MessageList
               messages={messages}
               currentUserId={currentUserId}
-              showSenderNames={conversation?.type !== 'direct'}
+              // Defaults to off until the context is known, so a message
+              // arriving mid-load never flashes a name in a 1-to-1 chat.
+              showSenderNames={conversation?.type === 'team' || conversation?.type === 'group'}
               hasMore={hasMore}
               loadingOlder={loadingOlder}
               onLoadOlder={() => void loadOlder()}

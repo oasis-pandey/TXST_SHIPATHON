@@ -23,6 +23,7 @@ const {
   createClientMessageId,
   createOptimisticMessage,
   latestPersistedTimestamp,
+  markMessageStatus,
   mergeMessages,
   optimisticIdFor,
 } = module_.exports;
@@ -105,4 +106,39 @@ test('client message ids are uuids even without a crypto implementation', () => 
   const id = createClientMessageId();
   assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.notEqual(id, createClientMessageId());
+});
+
+test('an unsent message stays at the bottom even when the device clock is behind', () => {
+  // The device is five minutes behind the server, so the optimistic timestamp
+  // sorts before history it was actually written after.
+  const behind = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const optimistic = {
+    ...createOptimisticMessage({
+      conversationId: 'conversation-1',
+      clientMessageId: 'client-3',
+      senderId: 'user-1',
+      senderDisplayName: 'You',
+      content: 'sent from a slow clock',
+    }),
+    createdAt: behind,
+  };
+
+  const log = mergeMessages(
+    [
+      persisted('server-1', new Date(Date.now() - 60 * 1000).toISOString()),
+      persisted('server-2', new Date().toISOString()),
+    ],
+    [optimistic],
+  );
+
+  assert.equal(log[log.length - 1].id, optimisticIdFor('client-3'));
+
+  // A failed send holds that position instead of jumping back up the log.
+  // Merging a new row forces a genuine re-sort rather than an early return.
+  const afterFailure = markMessageStatus(log, optimisticIdFor('client-3'), 'failed');
+  const resorted = mergeMessages(afterFailure, [
+    persisted('server-3', new Date(Date.now() + 1000).toISOString()),
+  ]);
+  assert.equal(resorted[resorted.length - 1].id, optimisticIdFor('client-3'));
+  assert.equal(resorted[resorted.length - 2].id, 'server-3');
 });

@@ -96,18 +96,22 @@ export function MessageList({
           new Date(older.createdAt).toDateString() !== new Date(item.createdAt).toDateString();
 
         return (
+          // The list is inverted but each cell still lays out top to bottom, so
+          // the day label belongs before the bubble to appear above it.
           <View>
-            <MessageBubble
-              message={item}
-              isOwn={item.senderId === currentUserId}
-              showSender={showSenderNames}
-              onRetry={() => onRetry(item)}
-            />
             {startsNewDay ? (
               <ThemedText type="code" themeColor="textSecondary" style={styles.dayLabel}>
                 {formatDayLabel(item.createdAt)}
               </ThemedText>
             ) : null}
+            <MessageBubble
+              message={item}
+              // Without the guard, a message whose sender profile was deleted
+              // (null) matches a not-yet-resolved current user (also null).
+              isOwn={Boolean(currentUserId) && item.senderId === currentUserId}
+              showSender={showSenderNames}
+              onRetry={() => onRetry(item)}
+            />
           </View>
         );
       }}
