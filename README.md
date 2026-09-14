@@ -62,6 +62,20 @@ developers can discover other solo developers or existing teams, while team
 members can discover solo candidates on behalf of their team. A team has a
 capacity of either 2 or 4 people.
 
+## Supabase client setup
+
+Copy `.env.example` to `.env.local` and set the project URL and publishable key:
+
+```text
+EXPO_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+```
+
+Apply the migrations in `supabase/migrations` before using the Teams tab. Team
+creation, proposal creation, candidate responses, voting, final admission, and
+team-related notification creation run through authenticated database functions.
+The client never uses a service-role key.
+
 A **match** is reciprocal interest between two solo users; it does not add
 either user to a team. A **team membership proposal** represents a candidate
 being considered by an existing team and records the candidate's response and
