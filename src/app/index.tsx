@@ -1,98 +1,47 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
+import { StatusBar } from 'expo-status-bar';
+import { useMemo, useRef, useState } from 'react';
+import { Animated, Dimensions, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { type MatchProfile, type ProfileQueue } from '@/features/discover/profile-queue';
+import { createSampleProfileQueue } from '@/features/discover/sample-profile-queue';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
+const { width: screenWidth } = Dimensions.get('window');
+const SWIPE_THRESHOLD = 110;
+
+export default function DiscoverRoute() {
+  const [queue] = useState(createSampleProfileQueue);
+  return <DiscoverView queue={queue} />;
 }
 
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
-  );
+export function DiscoverView({ queue }: { queue: ProfileQueue }) {
+  const [, setQueueRevision] = useState(0);
+  const [isBioOpen, setIsBioOpen] = useState(false);
+  const position = useRef(new Animated.ValueXY()).current;
+  const profile = queue.current();
+  const nextProfile = queue.peek();
+  const finishSwipe = (direction: 1 | -1) => Animated.timing(position, { toValue: { x: direction * (screenWidth + 80), y: 0 }, duration: 230, useNativeDriver: true }).start(() => { position.setValue({ x: 0, y: 0 }); queue.advance(); setQueueRevision((value) => value + 1); setIsBioOpen(false); });
+  const resetCard = () => Animated.spring(position, { toValue: { x: 0, y: 0 }, useNativeDriver: true }).start();
+  const panResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 6 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+    onPanResponderMove: Animated.event([null, { dx: position.x, dy: position.y }], { useNativeDriver: false }),
+    onPanResponderRelease: (_, gesture) => gesture.dx > SWIPE_THRESHOLD ? finishSwipe(1) : gesture.dx < -SWIPE_THRESHOLD ? finishSwipe(-1) : resetCard(),
+  }), [position, queue]);
+  const rotation = position.x.interpolate({ inputRange: [-screenWidth, 0, screenWidth], outputRange: ['-13deg', '0deg', '13deg'] });
+  const nopeOpacity = position.x.interpolate({ inputRange: [-130, -35], outputRange: [1, 0], extrapolate: 'clamp' });
+  const likeOpacity = position.x.interpolate({ inputRange: [35, 130], outputRange: [0, 1], extrapolate: 'clamp' });
+  return <View style={styles.page}><StatusBar style="dark" /><SafeAreaView style={styles.safeArea} edges={['top']}>
+    <View style={styles.header}><View><Text style={styles.eyebrow}>DISCOVER</Text><Text style={styles.heading}>Made for you</Text></View><Pressable style={styles.filterButton} accessibilityLabel="Open discovery filters"><Text style={styles.filterIcon}>☷</Text></Pressable></View>
+    <View style={styles.progressRow}>{Array.from({ length: queue.length }, (_, step) => <View key={step} style={[styles.progress, step <= queue.position && styles.progressActive]} />)}</View>
+    <View style={styles.deck}>{nextProfile && <ProfileCard profile={nextProfile} style={styles.backCard} />}{profile ? <Animated.View {...panResponder.panHandlers} style={[styles.card, { transform: [...position.getTranslateTransform(), { rotate: rotation }] }]}><Animated.Text style={[styles.stamp, styles.nopeStamp, { opacity: nopeOpacity }]}>NOPE</Animated.Text><Animated.Text style={[styles.stamp, styles.likeStamp, { opacity: likeOpacity }]}>LIKE</Animated.Text><ProfileCard profile={profile} expanded={isBioOpen} onMore={() => setIsBioOpen((value) => !value)} /></Animated.View> : <View style={styles.emptyState}><Text style={styles.emptyEmoji}>✨</Text><Text style={styles.emptyTitle}>You&apos;re all caught up</Text><Text style={styles.emptyCopy}>New people will appear here when they&apos;re nearby.</Text><Pressable style={styles.refreshButton} onPress={() => { queue.reset(); setQueueRevision((value) => value + 1); }}><Text style={styles.refreshText}>Start over</Text></Pressable></View>}</View>
+    <View style={styles.actions}><ActionButton label="↶" color="#F0A442" size="small" onPress={resetCard} accessibilityLabel="Rewind" /><ActionButton label="×" color="#E76B6C" size="large" onPress={() => profile && finishSwipe(-1)} accessibilityLabel="Pass" /><ActionButton label="★" color="#9B78D1" size="small" onPress={() => profile && finishSwipe(1)} accessibilityLabel="Super like" /><ActionButton label="♥" color="#38BA8D" size="large" onPress={() => profile && finishSwipe(1)} accessibilityLabel="Like" /></View><Text style={styles.hint}>Swipe right to like · left to pass</Text>
+  </SafeAreaView></View>;
 }
-
+function ProfileCard({ profile, style, expanded = false, onMore }: { profile: MatchProfile; style?: object; expanded?: boolean; onMore?: () => void }) { return <View style={[styles.cardInner, style]}><Image source={{ uri: profile.image }} style={styles.photo} contentFit="cover" transition={200} /><View style={[styles.photoTint, { backgroundColor: profile.color }]} /><View style={styles.cardContent}><View style={styles.nameRow}><Text style={styles.name}>{profile.name}, {profile.age}</Text><Pressable onPress={onMore} style={styles.infoButton} accessibilityLabel="View profile details"><Text style={styles.infoIcon}>i</Text></Pressable></View><Text style={styles.distance}>●  {profile.distance}</Text><View style={styles.tags}>{profile.tags.map((tag) => <View key={tag} style={styles.tag}><Text style={styles.tagText}>{tag}</Text></View>)}</View>{expanded && <Text style={styles.bio}>{profile.bio}</Text>}</View></View>; }
+function ActionButton({ label, color, size, onPress, accessibilityLabel }: { label: string; color: string; size: 'small' | 'large'; onPress: () => void; accessibilityLabel: string }) { return <Pressable accessibilityLabel={accessibilityLabel} onPress={onPress} style={[styles.actionButton, size === 'large' ? styles.actionLarge : styles.actionSmall]}><Text style={[styles.actionIcon, { color }, size === 'large' && styles.actionIconLarge]}>{label}</Text></Pressable>; }
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
+  page: { flex: 1, backgroundColor: '#FFFDF9' }, safeArea: { flex: 1, paddingHorizontal: 20, paddingBottom: 12 }, header: { height: 72, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, eyebrow: { fontSize: 10, fontWeight: '800', letterSpacing: 1.8, color: '#A78D78' }, heading: { fontSize: 27, fontWeight: '700', letterSpacing: -0.8, color: '#26211E', marginTop: 3 }, filterButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#F5EFE9', alignItems: 'center', justifyContent: 'center' }, filterIcon: { fontSize: 25, color: '#564A42', transform: [{ rotate: '90deg' }] },
+  progressRow: { flexDirection: 'row', gap: 5, marginBottom: 14 }, progress: { flex: 1, height: 3, borderRadius: 2, backgroundColor: '#EEE8E2' }, progressActive: { backgroundColor: '#DE8C75' }, deck: { flex: 1, minHeight: 420, justifyContent: 'center' }, card: { ...StyleSheet.absoluteFill, zIndex: 2 }, backCard: { position: 'absolute', top: 11, left: 8, right: 8, bottom: 0, transform: [{ scale: 0.97 }], opacity: 0.65 }, cardInner: { flex: 1, overflow: 'hidden', borderRadius: 28, backgroundColor: '#D5A091', shadowColor: '#44342E', shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 9 }, elevation: 5 }, photo: { ...StyleSheet.absoluteFill }, photoTint: { ...StyleSheet.absoluteFill, opacity: 0.12 }, cardContent: { marginTop: 'auto', padding: 22, paddingTop: 78, backgroundColor: 'rgba(20, 15, 13, 0.44)' }, nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, name: { color: '#fff', fontSize: 30, lineHeight: 36, letterSpacing: -1, fontWeight: '700' }, infoButton: { width: 25, height: 25, borderRadius: 13, borderWidth: 1.5, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' }, infoIcon: { color: '#fff', fontWeight: '800', fontSize: 15 }, distance: { color: '#F8F4F1', fontSize: 13, marginTop: 6, fontWeight: '600' }, tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 15 }, tag: { borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.19)', paddingHorizontal: 11, paddingVertical: 6 }, tagText: { color: '#fff', fontSize: 12, fontWeight: '600' }, bio: { color: '#fff', fontSize: 13, lineHeight: 19, marginTop: 14 },
+  stamp: { position: 'absolute', top: 47, zIndex: 4, borderWidth: 4, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 2, fontSize: 31, fontWeight: '900', letterSpacing: 1, backgroundColor: 'rgba(255,255,255,0.16)' }, nopeStamp: { left: 25, color: '#F16868', borderColor: '#F16868', transform: [{ rotate: '-16deg' }] }, likeStamp: { right: 25, color: '#50D09E', borderColor: '#50D09E', transform: [{ rotate: '16deg' }] }, actions: { height: 86, paddingTop: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 15 }, actionButton: { backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', shadowColor: '#856E5D', shadowOpacity: 0.14, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 3 }, actionSmall: { width: 48, height: 48, borderRadius: 24 }, actionLarge: { width: 62, height: 62, borderRadius: 31 }, actionIcon: { fontSize: 26, fontWeight: '400', lineHeight: 30 }, actionIconLarge: { fontSize: 37, lineHeight: 40 }, hint: { color: '#9B918A', fontSize: 12, textAlign: 'center', marginTop: 7 }, emptyState: { flex: 1, borderRadius: 28, backgroundColor: '#F9F1EA', alignItems: 'center', justifyContent: 'center', padding: 36 }, emptyEmoji: { fontSize: 44, marginBottom: 14 }, emptyTitle: { fontSize: 22, fontWeight: '700', color: '#342A25' }, emptyCopy: { color: '#83756C', lineHeight: 20, textAlign: 'center', marginTop: 9 }, refreshButton: { marginTop: 22, backgroundColor: '#D77969', borderRadius: 24, paddingVertical: 12, paddingHorizontal: 22 }, refreshText: { color: '#fff', fontWeight: '700' },
 });
