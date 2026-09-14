@@ -1,25 +1,25 @@
 import type { Store } from "@reduxjs/toolkit";
 
 import {
-  advanceQueue,
-  replaceQueue,
-  resetQueue,
+    advanceQueue,
+    replaceQueue,
+    resetQueue,
 } from "@/matching/data-access/store/discover/discover.slice";
 import type { RootState } from "@/shared/data-access/store";
 
 import type {
-  MatchProfile,
-  ProfileQueue,
-  ProfileQueueSnapshot,
+    MatchProfile,
+    ProfileQueue,
+    ProfileQueueSnapshot,
 } from "./profile-queue";
 
 const emptyQueue = { profiles: [], position: 0 };
 const loadingSnapshot: ProfileQueueSnapshot = {
-  current: undefined,
-  next: undefined,
-  length: 0,
-  position: 0,
-  isReady: false,
+    current: undefined,
+    next: undefined,
+    length: 0,
+    position: 0,
+    isReady: false,
 };
 
 /**
@@ -27,44 +27,44 @@ const loadingSnapshot: ProfileQueueSnapshot = {
  * ProfileQueue interface, so a mode can inject a different queue implementation.
  */
 export function createReduxProfileQueue(
-  store: Store<RootState>,
-  queueId: string,
+    store: Store<RootState>,
+    queueId: string,
 ): ProfileQueue {
-  const getQueue = () => store.getState().matching[queueId] ?? emptyQueue;
-  let previousQueue = getQueue();
-  let previousSnapshot: ProfileQueueSnapshot =
-    previousQueue === emptyQueue
-      ? loadingSnapshot
-      : {
-          current: previousQueue.profiles[previousQueue.position],
-          next: previousQueue.profiles[previousQueue.position + 1],
-          length: previousQueue.profiles.length,
-          position: previousQueue.position,
-          isReady: true,
+    const getQueue = () => store.getState().matching[queueId] ?? emptyQueue;
+    let previousQueue = getQueue();
+    let previousSnapshot: ProfileQueueSnapshot =
+        previousQueue === emptyQueue
+            ? loadingSnapshot
+            : {
+                current: previousQueue.profiles[previousQueue.position],
+                next: previousQueue.profiles[previousQueue.position + 1],
+                length: previousQueue.profiles.length,
+                position: previousQueue.position,
+                isReady: true,
+            };
+
+    const getSnapshot = () => {
+        const queue = getQueue();
+        if (queue === previousQueue) return previousSnapshot;
+
+        previousQueue = queue;
+        previousSnapshot = {
+            current: queue.profiles[queue.position],
+            next: queue.profiles[queue.position + 1],
+            length: queue.profiles.length,
+            position: queue.position,
+            isReady: true,
         };
-
-  const getSnapshot = () => {
-    const queue = getQueue();
-    if (queue === previousQueue) return previousSnapshot;
-
-    previousQueue = queue;
-    previousSnapshot = {
-      current: queue.profiles[queue.position],
-      next: queue.profiles[queue.position + 1],
-      length: queue.profiles.length,
-      position: queue.position,
-      isReady: true,
+        return previousSnapshot;
     };
-    return previousSnapshot;
-  };
 
-  return {
-    getSnapshot,
-    advance: (expectedPosition) =>
-      store.dispatch(advanceQueue({ queueId, expectedPosition })),
-    reset: () => store.dispatch(resetQueue({ queueId })),
-    replace: (profiles: readonly MatchProfile[]) =>
-      store.dispatch(replaceQueue({ queueId, profiles })),
-    subscribe: (listener) => store.subscribe(listener),
-  };
+    return {
+        getSnapshot,
+        advance: (expectedPosition) =>
+            store.dispatch(advanceQueue({ queueId, expectedPosition })),
+        reset: () => store.dispatch(resetQueue({ queueId })),
+        replace: (profiles: readonly MatchProfile[]) =>
+            store.dispatch(replaceQueue({ queueId, profiles })),
+        subscribe: (listener) => store.subscribe(listener),
+    };
 }
