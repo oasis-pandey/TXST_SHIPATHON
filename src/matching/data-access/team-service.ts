@@ -191,7 +191,8 @@ export async function createProposal(
 const proposalSelect = `
   *,
   candidate:profiles!team_membership_proposals_candidate_user_id_fkey(
-    id, display_name, avatar_url, preferred_roles, tech_stack
+    id, display_name, avatar_url, bio, github_url, skill_level, availability,
+    preferred_roles, tech_stack, interests
   ),
   team:teams(*),
   votes:team_membership_votes(*)
