@@ -1,9 +1,13 @@
-import type { Store } from '@reduxjs/toolkit';
+import type { Store } from "@reduxjs/toolkit";
 
-import { advanceQueue, replaceQueue, resetQueue } from '@/store/profile-queues-slice';
-import type { RootState } from '@/store/store';
+import {
+  advanceQueue,
+  replaceQueue,
+  resetQueue,
+} from "@/store/profile-queues-slice";
+import type { RootState } from "@/store/store";
 
-import type { MatchProfile, ProfileQueue } from './profile-queue';
+import type { MatchProfile, ProfileQueue } from "./profile-queue";
 
 const emptyQueue = { profiles: [], position: 0 };
 
@@ -13,7 +17,7 @@ const emptyQueue = { profiles: [], position: 0 };
  */
 export function createReduxProfileQueue(
   store: Store<RootState>,
-  queueId: string
+  queueId: string,
 ): ProfileQueue {
   const getQueue = () => store.getState().profileQueues[queueId] ?? emptyQueue;
 

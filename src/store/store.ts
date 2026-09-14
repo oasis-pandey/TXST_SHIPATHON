@@ -1,6 +1,6 @@
-import { configureStore } from '@reduxjs/toolkit';
+import { configureStore } from "@reduxjs/toolkit";
 
-import profileQueuesReducer from './profile-queues-slice';
+import profileQueuesReducer from "./profile-queues-slice";
 
 export const store = configureStore({
   reducer: {
