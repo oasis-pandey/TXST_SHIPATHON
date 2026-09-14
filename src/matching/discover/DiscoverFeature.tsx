@@ -19,13 +19,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { store } from "@/shared/data-access/store";
 import {
     type MatchProfile,
     type ProfileQueue,
 } from "@/matching/data-access/profile-queue";
 import { createReduxProfileQueue } from "@/matching/data-access/redux-profile-queue";
 import { SAMPLE_PROFILES } from "@/matching/data-access/sample-profile-queue";
+import { store } from "@/shared/data-access/store";
 
 const { width: screenWidth } = Dimensions.get("window");
 const SWIPE_THRESHOLD = 110;
