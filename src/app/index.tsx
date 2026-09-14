@@ -53,7 +53,7 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     queue.getSnapshot,
     queue.getSnapshot,
   );
-  const [isBioOpen, setIsBioOpen] = useState(false);
+  const [isBioOpen, setIsBioOpen] = useState(true);
   const [isSwiping, setIsSwiping] = useState(false);
   const swipeInProgress = useRef(false);
   const idlePosition = useRef(new Animated.ValueXY()).current;
@@ -177,29 +177,6 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     <View style={styles.page}>
       <StatusBar style="dark" />
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.eyebrow}>DISCOVER</Text>
-            <Text style={styles.heading}>Made for you</Text>
-          </View>
-          <Pressable
-            style={styles.filterButton}
-            accessibilityLabel="Open discovery filters"
-          >
-            <Text style={styles.filterIcon}>☷</Text>
-          </Pressable>
-        </View>
-        <View style={styles.progressRow}>
-          {Array.from({ length: snapshot.length }, (_, step) => (
-            <View
-              key={step}
-              style={[
-                styles.progress,
-                step <= snapshot.position && styles.progressActive,
-              ]}
-            />
-          ))}
-        </View>
         <View style={styles.deck}>
           {snapshot.next && (
             <Animated.View
@@ -309,7 +286,6 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
             />
           </View>
         </View>
-        <Text style={styles.hint}>Swipe right to like · left to pass</Text>
       </SafeAreaView>
     </View>
   );
@@ -457,8 +433,8 @@ const styles = StyleSheet.create({
   cardContent: {
     marginTop: "auto",
     padding: 22,
-    paddingTop: 78,
-    paddingBottom: 126,
+    paddingTop: 20,
+    paddingBottom: 100,
     backgroundColor: "rgba(20, 15, 13, 0.44)",
   },
   nameRow: {
@@ -512,9 +488,9 @@ const styles = StyleSheet.create({
   actions: {
     position: "absolute",
     zIndex: 10,
-    left: 20,
-    right: 20,
-    bottom: 24,
+    left: 16,
+    right: 16,
+    bottom: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
