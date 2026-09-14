@@ -7,7 +7,7 @@ import { AuthProvider, useAuth } from '@/users/data-access/auth-context';
 import { AuthGate } from '@/users/ui/AuthGate';
 import { Provider } from "react-redux";
 
-import { store } from "@/app/store";
+import { store } from "@/shared/data-access/store";
 
 SplashScreen.preventAutoHideAsync();
 

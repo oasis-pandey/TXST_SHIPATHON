@@ -5,7 +5,7 @@ import {
   replaceQueue,
   resetQueue,
 } from "@/matching/data-access/store/discover/discover.slice";
-import type { RootState } from "@/app/store";
+import type { RootState } from "@/shared/data-access/store";
 
 import type {
   MatchProfile,
