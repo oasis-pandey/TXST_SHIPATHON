@@ -1,16 +1,17 @@
 import type { Store } from "@reduxjs/toolkit";
 
 import {
-    advanceQueue,
-    replaceQueue,
-    resetQueue,
+  advanceQueue,
+  appendQueue,
+  replaceQueue,
+  resetQueue,
 } from "@/matching/data-access/store/discover/discover.slice";
 import type { RootState } from "@/shared/data-access/store";
 
 import type {
-    MatchProfile,
-    ProfileQueue,
-    ProfileQueueSnapshot,
+  UserRecommendationProfile,
+  ProfileQueue,
+  ProfileQueueSnapshot,
 } from "./profile-queue";
 
 const emptyQueue = { profiles: [], position: 0 };
@@ -58,13 +59,15 @@ export function createReduxProfileQueue(
         return previousSnapshot;
     };
 
-    return {
-        getSnapshot,
-        advance: (expectedPosition) =>
-            store.dispatch(advanceQueue({ queueId, expectedPosition })),
-        reset: () => store.dispatch(resetQueue({ queueId })),
-        replace: (profiles: readonly MatchProfile[]) =>
-            store.dispatch(replaceQueue({ queueId, profiles })),
-        subscribe: (listener) => store.subscribe(listener),
-    };
+  return {
+    getSnapshot,
+    advance: (expectedPosition) =>
+      store.dispatch(advanceQueue({ queueId, expectedPosition })),
+    append: (profiles: readonly UserRecommendationProfile[]) =>
+      store.dispatch(appendQueue({ queueId, profiles })),
+    reset: () => store.dispatch(resetQueue({ queueId })),
+    replace: (profiles: readonly UserRecommendationProfile[]) =>
+      store.dispatch(replaceQueue({ queueId, profiles })),
+    subscribe: (listener) => store.subscribe(listener),
+  };
 }
