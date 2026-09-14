@@ -3,7 +3,21 @@ import { withSupabase } from "@supabase/server";
 
 const PLACEHOLDER_QUEUE_SIZE = 10;
 
-type Candidate = { id: string };
+type Candidate = {
+  id: string;
+  display_name: string;
+  bio: string | null;
+  avatar_url: string | null;
+  github_url: string | null;
+  skill_level: string | null;
+  availability: string | null;
+  discovery_mode: "people" | "teams" | "both";
+  tech_stack: string[];
+  interests: string[];
+  preferred_roles: string[];
+  created_at: string;
+  updated_at: string;
+};
 
 function chooseRandomCandidates(candidates: Candidate[]) {
   return [...candidates]
@@ -13,7 +27,7 @@ function chooseRandomCandidates(candidates: Candidate[]) {
 
 export default {
   fetch: withSupabase({ auth: "user" }, async (_request, ctx) => {
-    const actorId = ctx.userClaims?.sub;
+    const actorId = ctx.userClaims?.id;
     if (!actorId) {
       return Response.json({ error: "Authenticated user is required." }, { status: 401 });
     }
@@ -22,16 +36,19 @@ export default {
     // algorithm once its inputs and ranking contract are defined.
     const { data: profiles, error: profilesError } = await ctx.supabaseAdmin
       .from("profiles")
-      .select("id")
+      .select(
+        "id, display_name, bio, avatar_url, github_url, skill_level, availability, discovery_mode, tech_stack, interests, preferred_roles, created_at, updated_at",
+      )
       .neq("id", actorId);
 
     if (profilesError) {
+      console.error("Could not load queue candidates", profilesError);
       return Response.json({ error: "Could not load queue candidates." }, { status: 500 });
     }
 
     const candidates = chooseRandomCandidates((profiles ?? []) as Candidate[]);
     if (!candidates.length) {
-      return Response.json({ added: 0 });
+      return Response.json({ added: 0, recommendations: [] });
     }
 
     const { error: queueError } = await ctx.supabaseAdmin
@@ -51,9 +68,10 @@ export default {
       );
 
     if (queueError) {
+      console.error("Could not populate recommendation queue", queueError);
       return Response.json({ error: "Could not populate recommendation queue." }, { status: 500 });
     }
 
-    return Response.json({ added: candidates.length });
+    return Response.json({ added: candidates.length, recommendations: candidates });
   }),
 };

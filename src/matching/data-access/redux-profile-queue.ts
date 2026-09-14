@@ -2,6 +2,7 @@ import type { Store } from "@reduxjs/toolkit";
 
 import {
   advanceQueue,
+  appendQueue,
   replaceQueue,
   resetQueue,
 } from "@/matching/data-access/store/discover/discover.slice";
@@ -62,6 +63,8 @@ export function createReduxProfileQueue(
     getSnapshot,
     advance: (expectedPosition) =>
       store.dispatch(advanceQueue({ queueId, expectedPosition })),
+    append: (profiles: readonly UserRecommendationProfile[]) =>
+      store.dispatch(appendQueue({ queueId, profiles })),
     reset: () => store.dispatch(resetQueue({ queueId })),
     replace: (profiles: readonly UserRecommendationProfile[]) =>
       store.dispatch(replaceQueue({ queueId, profiles })),

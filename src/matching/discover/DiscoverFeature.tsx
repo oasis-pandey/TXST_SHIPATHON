@@ -25,10 +25,11 @@ import {
     type ProfileQueue,
 } from "@/matching/data-access/profile-queue";
 import { createReduxProfileQueue } from "@/matching/data-access/redux-profile-queue";
-import { SAMPLE_PROFILES } from "@/matching/data-access/sample-profile-queue";
+import { requestUserRecommendations } from "@/matching/data-access/user-recommendation-service";
 
 const { width: screenWidth } = Dimensions.get("window");
 const SWIPE_THRESHOLD = 110;
+const MINIMUM_REMAINING_RECOMMENDATIONS = 3;
 
 type ActiveCard = {
     profile: UserRecommendationProfile;
@@ -41,9 +42,6 @@ export function DiscoverFeature() {
         () => createReduxProfileQueue(store, "default-discover"),
         [],
     );
-    useEffect(() => {
-        queue.replace(SAMPLE_PROFILES);
-    }, [queue]);
     return <DiscoverView queue={queue} />;
 }
 
@@ -55,7 +53,11 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     );
     const [isBioOpen, setIsBioOpen] = useState(true);
     const [isSwiping, setIsSwiping] = useState(false);
+    const [recommendationError, setRecommendationError] = useState<string | null>(null);
+    const [recommendationRequestAttempt, setRecommendationRequestAttempt] = useState(0);
     const swipeInProgress = useRef(false);
+    const recommendationRequestInProgress = useRef(false);
+    const isInitialRecommendationRequest = useRef(true);
     const idlePosition = useRef(new Animated.ValueXY()).current;
     const [activeCard, setActiveCard] = useState<ActiveCard | undefined>(() =>
         snapshot.current
@@ -92,6 +94,35 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     }, [activeCard, snapshot]);
 
     const position = activeCard?.position ?? idlePosition;
+
+    useEffect(() => {
+        const remainingRecommendations = snapshot.length - snapshot.position;
+        const shouldRequestRecommendations =
+            isInitialRecommendationRequest.current ||
+            remainingRecommendations < MINIMUM_REMAINING_RECOMMENDATIONS;
+
+        if (!shouldRequestRecommendations || recommendationRequestInProgress.current) return;
+
+        recommendationRequestInProgress.current = true;
+        void requestUserRecommendations()
+            .then((profiles) => {
+                if (isInitialRecommendationRequest.current) {
+                    queue.replace(profiles);
+                    isInitialRecommendationRequest.current = false;
+                } else {
+                    queue.append(profiles);
+                }
+                setRecommendationError(null);
+            })
+            .catch((cause: unknown) => {
+                setRecommendationError(
+                    cause instanceof Error ? cause.message : "Could not load recommendations.",
+                );
+            })
+            .finally(() => {
+                recommendationRequestInProgress.current = false;
+            });
+    }, [queue, recommendationRequestAttempt, snapshot.length, snapshot.position]);
 
     const finishSwipe = (direction: 1 | -1) => {
         if (!activeCard || swipeInProgress.current) return;
@@ -234,6 +265,17 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                     ) : !snapshot.isReady ? (
                         <View style={styles.loadingState}>
                             <Text style={styles.loadingText}>Finding people nearby…</Text>
+                            {recommendationError && (
+                                <>
+                                    <Text style={styles.errorText}>{recommendationError}</Text>
+                                    <Pressable
+                                        accessibilityRole="button"
+                                        onPress={() => setRecommendationRequestAttempt((attempt) => attempt + 1)}
+                                    >
+                                        <Text style={styles.refreshText}>Try again</Text>
+                                    </Pressable>
+                                </>
+                            )}
                         </View>
                     ) : (
                         <View style={styles.emptyState}>
@@ -245,46 +287,27 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                             <Pressable style={styles.refreshButton} onPress={queue.reset}>
                                 <Text style={styles.refreshText}>Start over</Text>
                             </Pressable>
+                            {recommendationError && <Text style={styles.errorText}>{recommendationError}</Text>}
                         </View>
                     )}
                 </View>
                 <View style={styles.actions}>
-                    <View style={styles.actionGroup}>
-                        <ActionButton
-                            label="♥"
-                            color="#38BA8D"
-                            size="large"
-                            onPress={() => finishSwipe(1)}
-                            accessibilityLabel="Like"
-                            disabled={!activeCard || isSwiping}
-                        />
-                        <ActionButton
-                            label="★"
-                            color="#9B78D1"
-                            size="small"
-                            onPress={() => finishSwipe(1)}
-                            accessibilityLabel="Favorite"
-                            disabled={!activeCard || isSwiping}
-                        />
-                    </View>
-                    <View style={styles.actionGroup}>
-                        <ActionButton
-                            label="↶"
-                            color="#F0A442"
-                            size="small"
-                            onPress={resetCard}
-                            accessibilityLabel="Back"
-                            disabled={!activeCard || isSwiping}
-                        />
-                        <ActionButton
-                            label="×"
-                            color="#E76B6C"
-                            size="large"
-                            onPress={() => finishSwipe(-1)}
-                            accessibilityLabel="Discard"
-                            disabled={!activeCard || isSwiping}
-                        />
-                    </View>
+                    <ActionButton
+                        label="♥"
+                        color="#38BA8D"
+                        size="large"
+                        onPress={() => finishSwipe(1)}
+                        accessibilityLabel="Like"
+                        disabled={!activeCard || isSwiping}
+                    />
+                    <ActionButton
+                        label="×"
+                        color="#E76B6C"
+                        size="large"
+                        onPress={() => finishSwipe(-1)}
+                        accessibilityLabel="Discard"
+                        disabled={!activeCard || isSwiping}
+                    />
                 </View>
             </SafeAreaView>
         </View>
@@ -317,7 +340,7 @@ function ProfileCard({
                     ● {[profile.skill_level, profile.availability].filter(Boolean).join(" · ") || "Developer"}
                 </Text>
                 <View style={styles.tags}>
-                    {[...profile.tech_stack, ...profile.preferred_roles].map((tag) => (
+                    {[...(profile.tech_stack ?? []), ...(profile.preferred_roles ?? [])].map((tag) => (
                         <View key={tag} style={styles.tag}>
                             <Text style={styles.tagText}>{tag}</Text>
                         </View>
@@ -557,4 +580,5 @@ const styles = StyleSheet.create({
         paddingHorizontal: 22,
     },
     refreshText: { color: "#fff", fontWeight: "700" },
+    errorText: { color: "#9D3029", marginTop: 12, textAlign: "center" },
 });

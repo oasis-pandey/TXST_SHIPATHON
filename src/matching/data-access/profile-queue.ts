@@ -35,6 +35,7 @@ export type ProfileQueueSnapshot = {
 export interface ProfileQueue {
   getSnapshot(): ProfileQueueSnapshot;
   advance(expectedPosition: number): void;
+  append(profiles: readonly UserRecommendationProfile[]): void;
   reset(): void;
   replace(profiles: readonly UserRecommendationProfile[]): void;
   subscribe(listener: () => void): () => void;
