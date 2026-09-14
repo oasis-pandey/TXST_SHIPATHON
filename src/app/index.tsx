@@ -1,6 +1,13 @@
 import { Image } from "expo-image";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   Animated,
   Dimensions,
@@ -23,6 +30,12 @@ import { store } from "@/store/store";
 const { width: screenWidth } = Dimensions.get("window");
 const SWIPE_THRESHOLD = 110;
 
+type ActiveCard = {
+  profile: MatchProfile;
+  queuePosition: number;
+  position: Animated.ValueXY;
+};
+
 export default function DiscoverRoute() {
   const queue = useMemo(
     () => createReduxProfileQueue(store, "default-discover"),
@@ -35,31 +48,72 @@ export default function DiscoverRoute() {
 }
 
 export function DiscoverView({ queue }: { queue: ProfileQueue }) {
-  const [, setQueueRevision] = useState(0);
-  useEffect(
-    () => queue.subscribe(() => setQueueRevision((value) => value + 1)),
-    [queue],
+  const snapshot = useSyncExternalStore(
+    queue.subscribe,
+    queue.getSnapshot,
+    queue.getSnapshot,
   );
   const [isBioOpen, setIsBioOpen] = useState(false);
-  const position = useRef(new Animated.ValueXY()).current;
-  const profile = queue.current();
-  const nextProfile = queue.peek();
-  const finishSwipe = (direction: 1 | -1) =>
+  const [isSwiping, setIsSwiping] = useState(false);
+  const swipeInProgress = useRef(false);
+  const idlePosition = useRef(new Animated.ValueXY()).current;
+  const [activeCard, setActiveCard] = useState<ActiveCard | undefined>(() =>
+    snapshot.current
+      ? {
+          profile: snapshot.current,
+          queuePosition: snapshot.position,
+          position: new Animated.ValueXY(),
+        }
+      : undefined,
+  );
+
+  useLayoutEffect(() => {
+    const currentProfile = snapshot.current;
+    const isCurrentCard =
+      activeCard?.profile === currentProfile &&
+      activeCard?.queuePosition === snapshot.position;
+
+    if (!currentProfile) {
+      if (activeCard) setActiveCard(undefined);
+    } else if (!isCurrentCard) {
+      // A profile is paired with one animation value for its entire lifetime.
+      // We never reset the outgoing profile's value for the incoming profile.
+      setActiveCard({
+        profile: currentProfile,
+        queuePosition: snapshot.position,
+        position: new Animated.ValueXY(),
+      });
+    }
+
+    if (swipeInProgress.current && !isCurrentCard) {
+      swipeInProgress.current = false;
+      setIsSwiping(false);
+    }
+  }, [activeCard, snapshot]);
+
+  const position = activeCard?.position ?? idlePosition;
+
+  const finishSwipe = (direction: 1 | -1) => {
+    if (!activeCard || swipeInProgress.current) return;
+
+    swipeInProgress.current = true;
+    setIsSwiping(true);
+
     Animated.timing(position, {
       toValue: { x: direction * (screenWidth + 80), y: 0 },
       duration: 230,
       useNativeDriver: true,
-    }).start(() => {
-      queue.advance();
-      setIsBioOpen(false);
+    }).start(({ finished }) => {
+      if (!finished) {
+        swipeInProgress.current = false;
+        setIsSwiping(false);
+        return;
+      }
 
-      // Let Redux advance the injected queue and React commit the next card
-      // before reusing this animation value. Resetting it first briefly put
-      // the outgoing profile back on screen.
-      requestAnimationFrame(() => {
-        position.setValue({ x: 0, y: 0 });
-      });
+      queue.advance(activeCard.queuePosition);
+      setIsBioOpen(false);
     });
+  };
   const resetCard = () =>
     Animated.spring(position, {
       toValue: { x: 0, y: 0 },
@@ -69,20 +123,25 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, gesture) =>
+          !swipeInProgress.current &&
           Math.abs(gesture.dx) > 6 &&
           Math.abs(gesture.dx) > Math.abs(gesture.dy),
         onPanResponderMove: Animated.event(
           [null, { dx: position.x, dy: position.y }],
           { useNativeDriver: false },
         ),
-        onPanResponderRelease: (_, gesture) =>
-          gesture.dx > SWIPE_THRESHOLD
-            ? finishSwipe(1)
-            : gesture.dx < -SWIPE_THRESHOLD
-              ? finishSwipe(-1)
-              : resetCard(),
+        onPanResponderRelease: (_, gesture) => {
+          if (swipeInProgress.current) return;
+          if (gesture.dx > SWIPE_THRESHOLD) {
+            finishSwipe(1);
+          } else if (gesture.dx < -SWIPE_THRESHOLD) {
+            finishSwipe(-1);
+          } else {
+            resetCard();
+          }
+        },
       }),
-    [position, queue],
+    [activeCard, position, queue],
   );
   const rotation = position.x.interpolate({
     inputRange: [-screenWidth, 0, screenWidth],
@@ -98,6 +157,22 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     outputRange: [0, 1],
     extrapolate: "clamp",
   });
+  const nextCardScale = position.x.interpolate({
+    inputRange: [-screenWidth, 0, screenWidth],
+    outputRange: [1, 0.97, 1],
+    extrapolate: "clamp",
+  });
+  const nextCardOpacity = position.x.interpolate({
+    inputRange: [-screenWidth, 0, screenWidth],
+    outputRange: [1, 0.65, 1],
+    extrapolate: "clamp",
+  });
+  const nextCardTranslateY = position.x.interpolate({
+    inputRange: [-screenWidth, 0, screenWidth],
+    outputRange: [0, 12, 0],
+    extrapolate: "clamp",
+  });
+
   return (
     <View style={styles.page}>
       <StatusBar style="dark" />
@@ -115,23 +190,36 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
           </Pressable>
         </View>
         <View style={styles.progressRow}>
-          {Array.from({ length: queue.length }, (_, step) => (
+          {Array.from({ length: snapshot.length }, (_, step) => (
             <View
               key={step}
               style={[
                 styles.progress,
-                step <= queue.position && styles.progressActive,
+                step <= snapshot.position && styles.progressActive,
               ]}
             />
           ))}
         </View>
         <View style={styles.deck}>
-          {nextProfile && (
-            <ProfileCard profile={nextProfile} style={styles.backCard} />
-          )}
-          {profile ? (
+          {snapshot.next && (
             <Animated.View
-              key={`${profile.name}-${queue.position}`}
+              style={[
+                styles.backCard,
+                {
+                  opacity: nextCardOpacity,
+                  transform: [
+                    { scale: nextCardScale },
+                    { translateY: nextCardTranslateY },
+                  ],
+                },
+              ]}
+            >
+              <ProfileCard profile={snapshot.next} />
+            </Animated.View>
+          )}{" "}
+          {activeCard ? (
+            <Animated.View
+              key={activeCard.queuePosition}
               {...panResponder.panHandlers}
               style={[
                 styles.card,
@@ -162,11 +250,15 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                 LIKE
               </Animated.Text>
               <ProfileCard
-                profile={profile}
+                profile={activeCard.profile}
                 expanded={isBioOpen}
                 onMore={() => setIsBioOpen((value) => !value)}
               />
             </Animated.View>
+          ) : !snapshot.isReady ? (
+            <View style={styles.loadingState}>
+              <Text style={styles.loadingText}>Finding people nearby…</Text>
+            </View>
           ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyEmoji}>✨</Text>
@@ -186,15 +278,17 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
               label="♥"
               color="#38BA8D"
               size="large"
-              onPress={() => profile && finishSwipe(1)}
+              onPress={() => finishSwipe(1)}
               accessibilityLabel="Like"
+              disabled={!activeCard || isSwiping}
             />
             <ActionButton
               label="★"
               color="#9B78D1"
               size="small"
-              onPress={() => profile && finishSwipe(1)}
+              onPress={() => finishSwipe(1)}
               accessibilityLabel="Favorite"
+              disabled={!activeCard || isSwiping}
             />
           </View>
           <View style={styles.actionGroup}>
@@ -204,13 +298,15 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
               size="small"
               onPress={resetCard}
               accessibilityLabel="Back"
+              disabled={!activeCard || isSwiping}
             />
             <ActionButton
               label="×"
               color="#E76B6C"
               size="large"
-              onPress={() => profile && finishSwipe(-1)}
+              onPress={() => finishSwipe(-1)}
               accessibilityLabel="Discard"
+              disabled={!activeCard || isSwiping}
             />
           </View>
         </View>
@@ -236,7 +332,6 @@ function ProfileCard({
         source={{ uri: profile.image }}
         style={styles.photo}
         contentFit="cover"
-        transition={200}
       />
       <View style={[styles.photoTint, { backgroundColor: profile.color }]} />
       <View style={styles.cardContent}>
@@ -271,20 +366,24 @@ function ActionButton({
   size,
   onPress,
   accessibilityLabel,
+  disabled = false,
 }: {
   label: string;
   color: string;
   size: "small" | "large";
   onPress: () => void;
   accessibilityLabel: string;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
+      disabled={disabled}
       style={[
         styles.actionButton,
         size === "large" ? styles.actionLarge : styles.actionSmall,
+        disabled && styles.actionButtonDisabled,
       ]}
     >
       <Text
@@ -360,13 +459,7 @@ const styles = StyleSheet.create({
   deck: { ...StyleSheet.absoluteFill, justifyContent: "center" },
   card: { ...StyleSheet.absoluteFill, zIndex: 2 },
   backCard: {
-    position: "absolute",
-    top: 11,
-    left: 8,
-    right: 8,
-    bottom: 0,
-    transform: [{ scale: 0.97 }],
-    opacity: 0.65,
+    ...StyleSheet.absoluteFill
   },
   cardInner: { flex: 1, overflow: "hidden", backgroundColor: "#D5A091" },
   photo: { ...StyleSheet.absoluteFill },
@@ -460,6 +553,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
     elevation: 6,
   },
+  actionButtonDisabled: {
+    opacity: 0.5,
+  },
   actionSmall: { width: 48, height: 48, borderRadius: 24 },
   actionLarge: { width: 62, height: 62, borderRadius: 31 },
   actionIcon: { fontSize: 26, fontWeight: "400", lineHeight: 30 },
@@ -482,6 +578,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 36,
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "600",
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowRadius: 4,
   },
   emptyEmoji: { fontSize: 44, marginBottom: 14 },
   emptyTitle: { fontSize: 22, fontWeight: "700", color: "#342A25" },

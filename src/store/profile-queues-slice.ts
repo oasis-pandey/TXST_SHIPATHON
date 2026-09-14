@@ -27,10 +27,14 @@ const profileQueuesSlice = createSlice({
         position: 0,
       };
     },
-    advanceQueue: (state, action: PayloadAction<{ queueId: string }>) => {
+    advanceQueue: (
+      state,
+      action: PayloadAction<{ queueId: string; expectedPosition: number }>,
+    ) => {
       const queue = state[action.payload.queueId];
-      if (queue)
+      if (queue && queue.position === action.payload.expectedPosition) {
         queue.position = Math.min(queue.position + 1, queue.profiles.length);
+      }
     },
     resetQueue: (state, action: PayloadAction<{ queueId: string }>) => {
       const queue = state[action.payload.queueId];
