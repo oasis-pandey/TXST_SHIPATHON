@@ -8,6 +8,19 @@ export type ProfileSummary = Pick<
   Tables<'profiles'>,
   'id' | 'display_name' | 'avatar_url' | 'preferred_roles' | 'tech_stack'
 >;
+export type ApplicantProfile = Pick<
+  Tables<'profiles'>,
+  | 'id'
+  | 'display_name'
+  | 'avatar_url'
+  | 'bio'
+  | 'github_url'
+  | 'skill_level'
+  | 'availability'
+  | 'preferred_roles'
+  | 'tech_stack'
+  | 'interests'
+>;
 
 export type ProposalType =
   | 'team_swiped_user'
@@ -28,7 +41,7 @@ export type TeamMember = TeamMemberRow & {
 
 export type ProposalWithDetails = Omit<TeamProposalRow, 'proposal_type'> & {
   proposal_type: ProposalType;
-  candidate: ProfileSummary | null;
+  candidate: ApplicantProfile | null;
   team: Team | null;
   votes: TeamVoteRow[];
 };

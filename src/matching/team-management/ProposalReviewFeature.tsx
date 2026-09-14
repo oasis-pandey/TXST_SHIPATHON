@@ -1,7 +1,9 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { Image } from 'expo-image';
 import { useCallback, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
 
+import { Spacing } from '@/shared/lib/theme';
 import { ThemedText } from '@/shared/ui/themed-text';
 import {
   castProposalVote,
@@ -72,25 +74,82 @@ export default function ProposalReviewScreen() {
       {resource.error && <ErrorState message={resource.error} />}
       {proposal && resource.data && (
         <>
-          <Card>
-            <View style={teamStyles.spread}>
-              <ThemedText type="subtitle">
-                {proposal.candidate?.display_name ?? 'Candidate'}
-              </ThemedText>
-              <StatusPill value={proposal.status} />
+          <SectionHeader
+            title={proposal.proposal_type === 'user_swiped_team' ? 'Applicant profile' : 'Candidate profile'}
+          />
+          <Card style={styles.profileCard}>
+            <View style={styles.profileHeader}>
+              {proposal.candidate?.avatar_url ? (
+                <Image
+                  source={{ uri: proposal.candidate.avatar_url }}
+                  style={styles.avatar}
+                  contentFit="cover"
+                  accessibilityLabel={`${proposal.candidate.display_name}'s profile picture`}
+                />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <ThemedText style={styles.avatarInitial}>
+                    {(proposal.candidate?.display_name ?? 'A').slice(0, 1).toUpperCase()}
+                  </ThemedText>
+                </View>
+              )}
+              <View style={styles.profileHeading}>
+                <View style={teamStyles.spread}>
+                  <ThemedText type="subtitle">
+                    {proposal.candidate?.display_name ?? 'Candidate'}
+                  </ThemedText>
+                  <StatusPill value={proposal.status} />
+                </View>
+                <ThemedText themeColor="textSecondary">
+                  {proposal.candidate?.skill_level || 'Skill level not provided'}
+                </ThemedText>
+              </View>
             </View>
             <ThemedText type="smallBold">
               {proposalTypeLabels[proposal.proposal_type]}
             </ThemedText>
-            <Chips values={proposal.candidate?.tech_stack ?? []} />
             <ThemedText themeColor="textSecondary">
-              {proposal.proposal_type === 'user_swiped_team'
-                ? 'Applicant consent: given when they applied'
-                : `Candidate response: ${proposal.candidate_response}`}
+              {proposal.candidate?.bio || 'This applicant has not added a bio yet.'}
             </ThemedText>
+            <View style={styles.profileDetails}>
+              <View style={styles.profileDetail}>
+                <ThemedText type="smallBold">Availability</ThemedText>
+                <ThemedText themeColor="textSecondary">
+                  {proposal.candidate?.availability || 'Not provided'}
+                </ThemedText>
+              </View>
+              <View style={styles.profileDetail}>
+                <ThemedText type="smallBold">Preferred roles</ThemedText>
+                <Chips values={proposal.candidate?.preferred_roles ?? []} />
+                {!proposal.candidate?.preferred_roles.length && (
+                  <ThemedText themeColor="textSecondary">Not provided</ThemedText>
+                )}
+              </View>
+            </View>
+            <View style={styles.profileDetail}>
+              <ThemedText type="smallBold">Tech stack</ThemedText>
+              <Chips values={proposal.candidate?.tech_stack ?? []} />
+              {!proposal.candidate?.tech_stack.length && (
+                <ThemedText themeColor="textSecondary">Not provided</ThemedText>
+              )}
+            </View>
+            <View style={styles.profileDetail}>
+              <ThemedText type="smallBold">Interests</ThemedText>
+              <Chips values={proposal.candidate?.interests ?? []} />
+              {!proposal.candidate?.interests.length && (
+                <ThemedText themeColor="textSecondary">Not provided</ThemedText>
+              )}
+            </View>
+            {proposal.candidate?.github_url && (
+              <Button
+                label="Open GitHub profile"
+                tone="secondary"
+                onPress={() => void Linking.openURL(proposal.candidate!.github_url!)}
+              />
+            )}
           </Card>
 
-          <SectionHeader title="Approval" />
+          <SectionHeader title="Voting" />
           <Card>
             <ThemedText style={styles.voteCount}>
               {resource.data.member ? yesVotes : '—'} / {proposal.required_yes_votes} yes votes
@@ -184,4 +243,16 @@ export default function ProposalReviewScreen() {
 
 const styles = StyleSheet.create({
   voteCount: { fontSize: 28, lineHeight: 36, fontWeight: '700' },
+  profileCard: { gap: Spacing.three },
+  profileHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  profileHeading: { flex: 1, gap: Spacing.one },
+  avatar: { width: 72, height: 72, borderRadius: 36 },
+  avatarFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3C87F7',
+  },
+  avatarInitial: { color: '#FFFFFF', fontSize: 28, lineHeight: 34, fontWeight: '800' },
+  profileDetails: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.four },
+  profileDetail: { flex: 1, minWidth: 180, gap: Spacing.one },
 });
