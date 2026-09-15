@@ -109,6 +109,14 @@ export async function createTeam(draft: TeamDraft) {
   return data;
 }
 
+export async function joinTeamByCode(joinCode: string) {
+  const { data, error } = await requireSupabase().rpc('join_team_by_code', {
+    p_join_code: joinCode.trim(),
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function updateTeam(teamId: string, draft: TeamDraft) {
   const { error } = await requireSupabase()
     .from('teams')

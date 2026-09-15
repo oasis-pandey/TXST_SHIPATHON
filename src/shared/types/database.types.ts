@@ -477,6 +477,7 @@ export type Database = {
           created_by: string | null
           description: string | null
           id: string
+          join_code: string
           match_id: string | null
           max_members: number
           name: string
@@ -490,6 +491,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          join_code?: string
           match_id?: string | null
           max_members?: number
           name: string
@@ -503,6 +505,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          join_code?: string
           match_id?: string | null
           max_members?: number
           name?: string
@@ -603,6 +606,10 @@ export type Database = {
           p_repo_url?: string
           p_tech_stack?: string[]
         }
+        Returns: string
+      }
+      join_team_by_code: {
+        Args: { p_join_code: string }
         Returns: string
       }
       create_team_with_initial_members: {

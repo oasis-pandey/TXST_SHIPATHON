@@ -1,6 +1,6 @@
 import { Link, router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { Spacing } from '@/shared/lib/theme';
 import { useResource } from '@/shared/hooks/use-resource';
@@ -11,13 +11,16 @@ import {
   isChatBackendMissing,
   listConversations,
   listMessageTargets,
+  openTeamConversation,
   openConversationWith,
 } from '@/chat/data-access/chat-service';
+import { joinTeamByCode } from '@/matching/data-access/team-service';
 import type { MessageTarget, MessageTargetType } from '@/chat/data-access/chat-types';
 import { subscribeToConversationList } from '@/chat/data-access/chat-realtime';
 import {
   ChatEmptyState,
   ChatErrorState,
+  ChatButton,
   ChatIconButton,
   ChatLoadingState,
   ChatScreen,
@@ -57,6 +60,9 @@ export default function ConversationListFeature() {
   const [context, setContext] = useState<MessageTargetType>('person');
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
+  const [joinOpen, setJoinOpen] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [joining, setJoining] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -96,6 +102,27 @@ export default function ConversationListFeature() {
     }
   }, []);
 
+  const joinTeam = useCallback(async () => {
+    setJoining(true);
+    setOpenError(null);
+    try {
+      const teamId = await joinTeamByCode(joinCode);
+      setJoinCode('');
+      setJoinOpen(false);
+      await refresh();
+      const conversationId = await openTeamConversation(teamId);
+      router.push({ pathname: '/chat/[conversationId]', params: { conversationId } });
+    } catch (cause) {
+      setOpenError(
+        cause && typeof cause === 'object' && 'message' in cause && typeof cause.message === 'string'
+          ? cause.message
+          : 'Could not join that team.',
+      );
+    } finally {
+      setJoining(false);
+    }
+  }, [joinCode, refresh]);
+
   if (!isSupabaseConfigured) {
     return (
       <ChatScreen>
@@ -131,6 +158,42 @@ export default function ConversationListFeature() {
           </Pressable>
         ))}
       </View>
+
+      {context === 'team' ? (
+        <View style={styles.teamActions}>
+          <Link href="/teams/new" asChild>
+            <ChatButton label="Create team" onPress={() => {}} />
+          </Link>
+          <ChatButton
+            label={joinOpen ? 'Close join' : 'Join team'}
+            tone="secondary"
+            onPress={() => {
+              setJoinOpen((value) => !value);
+              setOpenError(null);
+            }}
+          />
+        </View>
+      ) : null}
+
+      {context === 'team' && joinOpen ? (
+        <View style={styles.joinPanel}>
+          <ThemedText type="smallBold">Enter a team code</ThemedText>
+          <TextInput
+            accessibilityLabel="Four-digit team code"
+            value={joinCode}
+            onChangeText={(value) => setJoinCode(value.replace(/\D/g, '').slice(0, 4))}
+            placeholder="0000"
+            keyboardType="number-pad"
+            maxLength={4}
+            style={styles.joinInput}
+          />
+          <ChatButton
+            label={joining ? 'Joining…' : 'Join team'}
+            disabled={joining || joinCode.length !== 4}
+            onPress={() => void joinTeam()}
+          />
+        </View>
+      ) : null}
 
       {openError ? <ChatErrorState message={openError} /> : null}
       {resource.error ? (
@@ -225,4 +288,7 @@ const styles = StyleSheet.create({
   sectionTitle: { paddingHorizontal: Spacing.three, paddingTop: Spacing.three, paddingBottom: Spacing.one },
   targetRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingHorizontal: Spacing.three, paddingVertical: Spacing.three },
   pressed: { opacity: 0.6 },
+  teamActions: { flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingBottom: Spacing.two },
+  joinPanel: { marginHorizontal: Spacing.three, marginBottom: Spacing.two, padding: Spacing.three, gap: Spacing.two, borderRadius: Spacing.two, backgroundColor: 'rgba(127, 127, 127, 0.12)' },
+  joinInput: { minHeight: 48, borderWidth: 1, borderColor: 'rgba(127, 127, 127, 0.32)', borderRadius: Spacing.two, paddingHorizontal: Spacing.three, fontSize: 24, letterSpacing: 6, textAlign: 'center' },
 });

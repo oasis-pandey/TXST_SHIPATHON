@@ -60,6 +60,13 @@ export default function TeamDetailScreen() {
               current={resource.data.roster.length}
               maximum={resource.data.team.max_members}
             />
+            <View style={styles.codeBlock}>
+              <ThemedText type="smallBold">Team code</ThemedText>
+              <ThemedText type="subtitle" style={styles.code}>{resource.data.team.join_code}</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Share this four-digit code with people you want to invite.
+              </ThemedText>
+            </View>
           </Card>
 
           {resource.data.isMember && (
@@ -135,6 +142,8 @@ export default function TeamDetailScreen() {
 const styles = StyleSheet.create({
   overviewCard: { gap: Spacing.three },
   overviewColumn: { gap: Spacing.one },
+  codeBlock: { gap: Spacing.one, paddingTop: Spacing.two },
+  code: { letterSpacing: 4 },
   joinCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' },
   joinTitle: { fontSize: 20, lineHeight: 26, fontWeight: '700' },
   memberCard: { minHeight: 180 },
