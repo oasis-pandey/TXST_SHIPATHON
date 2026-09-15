@@ -152,7 +152,7 @@ export default function ProposalReviewScreen() {
           <SectionHeader title="Voting" />
           <Card>
             <ThemedText style={styles.voteCount}>
-              {resource.data.member ? yesVotes : '—'} / {proposal.required_yes_votes} yes votes
+              {resource.data.member ? yesVotes : 0} / {proposal.required_yes_votes} yes votes
             </ThemedText>
             <View style={teamStyles.spread}>
               <ThemedText type="smallBold">Creator approval</ThemedText>
@@ -168,8 +168,6 @@ export default function ProposalReviewScreen() {
               {proposal.required_yes_votes === 1
                 ? 'The team creator must approve this application.'
                 : 'The creator must approve, and more than half of the team must vote yes.'}
-              {' '}The {proposal.required_yes_votes}-vote requirement was fixed when this proposal was
-              created and is never recomputed.
             </ThemedText>
             {resource.data.member && !isCreator && !creatorApproved && proposal.status === 'pending' && (
               <ThemedText type="smallBold">
