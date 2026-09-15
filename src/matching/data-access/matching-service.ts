@@ -8,6 +8,8 @@ export type LikeDeveloperResult = {
   matched: boolean;
   matchCreated: boolean;
   matchId: string | null;
+  teamCreated: boolean;
+  teamId: string | null;
 };
 
 type CreateSwipeResponse = {
@@ -33,8 +35,12 @@ function isLikeDeveloperResult(value: unknown): value is LikeDeveloperResult {
     typeof result.matched === "boolean" &&
     typeof result.matchCreated === "boolean" &&
     (typeof result.matchId === "string" || result.matchId === null) &&
+    typeof result.teamCreated === "boolean" &&
+    (typeof result.teamId === "string" || result.teamId === null) &&
     (!result.matchCreated || result.matched) &&
-    (!result.matched || typeof result.matchId === "string")
+    (!result.matched || typeof result.matchId === "string") &&
+    (!result.teamCreated ||
+      (result.matchCreated && typeof result.teamId === "string"))
   );
 }
 

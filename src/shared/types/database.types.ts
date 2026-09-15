@@ -14,6 +14,119 @@ export type Database = {
   }
   public: {
     Tables: {
+      conversation_participants: {
+        Row: {
+          conversation_id: string
+          joined_at: string
+          last_read_at: string | null
+          role: string | null
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          joined_at?: string
+          last_read_at?: string | null
+          role?: string | null
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          joined_at?: string
+          last_read_at?: string | null
+          role?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_participants_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_participants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversations: {
+        Row: {
+          context_id: string | null
+          created_at: string
+          created_by: string | null
+          direct_user_1_id: string | null
+          direct_user_2_id: string | null
+          id: string
+          last_message_at: string | null
+          last_message_preview: string | null
+          last_message_sender_id: string | null
+          title: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          context_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          direct_user_1_id?: string | null
+          direct_user_2_id?: string | null
+          id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          last_message_sender_id?: string | null
+          title?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          context_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          direct_user_1_id?: string | null
+          direct_user_2_id?: string | null
+          id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          last_message_sender_id?: string | null
+          title?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_direct_user_1_id_fkey"
+            columns: ["direct_user_1_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_direct_user_2_id_fkey"
+            columns: ["direct_user_2_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_last_message_sender_id_fkey"
+            columns: ["last_message_sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       matches: {
         Row: {
           created_at: string
@@ -47,6 +160,51 @@ export type Database = {
           {
             foreignKeyName: "matches_user_2_id_fkey"
             columns: ["user_2_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          client_message_id: string | null
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          sender_display_name: string
+          sender_id: string | null
+        }
+        Insert: {
+          client_message_id?: string | null
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          sender_display_name?: string
+          sender_id?: string | null
+        }
+        Update: {
+          client_message_id?: string | null
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          sender_display_name?: string
+          sender_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -319,6 +477,8 @@ export type Database = {
           created_by: string | null
           description: string | null
           id: string
+          join_code: string
+          match_id: string | null
           max_members: number
           name: string
           project_idea: string | null
@@ -331,6 +491,8 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          join_code?: string
+          match_id?: string | null
           max_members?: number
           name: string
           project_idea?: string | null
@@ -343,6 +505,8 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          join_code?: string
+          match_id?: string | null
           max_members?: number
           name?: string
           project_idea?: string | null
@@ -358,6 +522,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "teams_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
@@ -368,6 +539,54 @@ export type Database = {
       cast_team_membership_vote: {
         Args: { p_decision: string; p_proposal_id: string }
         Returns: boolean
+      }
+      ensure_team_conversation: {
+        Args: { p_team_id: string }
+        Returns: string
+      }
+      is_conversation_member: {
+        Args: { p_conversation_id: string }
+        Returns: boolean
+      }
+      list_messageable_targets: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          avatar_url: string | null
+          conversation_id: string | null
+          subtitle: string | null
+          target_id: string
+          target_type: string
+          title: string | null
+        }[]
+      }
+      list_my_conversations: {
+        Args: { p_conversation_id?: string | null }
+        Returns: {
+          avatar_url: string | null
+          context_id: string | null
+          conversation_id: string
+          conversation_type: string
+          counterpart_user_id: string | null
+          created_at: string
+          last_message_at: string | null
+          last_message_preview: string | null
+          last_message_sender_id: string | null
+          last_message_sender_name: string | null
+          title: string | null
+          unread_count: number
+        }[]
+      }
+      send_message: {
+        Args: {
+          p_client_message_id?: string
+          p_content: string
+          p_conversation_id: string
+        }
+        Returns: Database["public"]["Tables"]["messages"]["Row"]
+      }
+      start_direct_conversation: {
+        Args: { p_other_user_id: string }
+        Returns: string
       }
       create_team_membership_proposal: {
         Args: {
@@ -389,6 +608,25 @@ export type Database = {
         }
         Returns: string
       }
+      join_team_by_code: {
+        Args: { p_join_code: string }
+        Returns: string
+      }
+      create_team_with_initial_members: {
+        Args: {
+          p_creator_id: string
+          p_creator_role: string
+          p_description: string
+          p_initial_member_ids: string[]
+          p_match_id: string
+          p_max_members: number
+          p_name: string
+          p_project_idea: string
+          p_repo_url: string
+          p_tech_stack: string[]
+        }
+        Returns: string
+      }
       create_user_like_and_match: {
         Args: { p_target_user_id: string }
         Returns: {
@@ -398,6 +636,8 @@ export type Database = {
           match_id: string | null
           matched: boolean
           swipe_id: string
+          team_created: boolean
+          team_id: string | null
           target_user_id: string
         }[]
       }

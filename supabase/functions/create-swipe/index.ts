@@ -25,6 +25,8 @@ type SuccessResponse = {
     matched: boolean;
     matchCreated: boolean;
     matchId: string | null;
+    teamCreated: boolean;
+    teamId: string | null;
   };
 };
 
@@ -36,6 +38,8 @@ type AtomicLikeRow = {
   matched: boolean;
   match_created: boolean;
   match_id: string | null;
+  team_created: boolean;
+  team_id: string | null;
 };
 
 const corsHeaders = {
@@ -69,7 +73,11 @@ function isAtomicLikeRow(value: unknown): value is AtomicLikeRow {
     typeof row.created_at === "string" &&
     typeof row.matched === "boolean" &&
     typeof row.match_created === "boolean" &&
-    (typeof row.match_id === "string" || row.match_id === null)
+    (typeof row.match_id === "string" || row.match_id === null) &&
+    typeof row.team_created === "boolean" &&
+    (typeof row.team_id === "string" || row.team_id === null) &&
+    (!row.team_created ||
+      (row.match_created && typeof row.team_id === "string"))
   );
 }
 
@@ -199,6 +207,8 @@ async function persistLike(
         matched: swipe.matched,
         matchCreated: swipe.match_created,
         matchId: swipe.match_id,
+        teamCreated: swipe.team_created,
+        teamId: swipe.team_id,
       },
     },
     200,

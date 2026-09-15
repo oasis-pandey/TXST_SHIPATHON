@@ -20,6 +20,8 @@ const rpcResult = {
   matched: true,
   match_created: true,
   match_id: "33333333-3333-4333-8333-333333333333",
+  team_created: true,
+  team_id: "44444444-4444-4444-8444-444444444444",
 };
 
 function setup({
@@ -154,6 +156,8 @@ test("create-swipe delegates atomic Like persistence and maps match data", async
     matched: true,
     matchCreated: true,
     matchId: "33333333-3333-4333-8333-333333333333",
+    teamCreated: true,
+    teamId: "44444444-4444-4444-8444-444444444444",
   });
   assert.deepEqual(JSON.parse(JSON.stringify(rpcCalls)), [
     {
@@ -170,6 +174,8 @@ test("create-swipe maps an unmatched result without a match ID", async () => {
       matched: false,
       match_created: false,
       match_id: null,
+      team_created: false,
+      team_id: null,
     },
   });
 
@@ -180,6 +186,8 @@ test("create-swipe maps an unmatched result without a match ID", async () => {
   assert.equal(body.data.matched, false);
   assert.equal(body.data.matchCreated, false);
   assert.equal(body.data.matchId, null);
+  assert.equal(body.data.teamCreated, false);
+  assert.equal(body.data.teamId, null);
 });
 
 test("create-swipe maps an atomic workflow failure", async () => {
