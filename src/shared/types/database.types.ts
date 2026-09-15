@@ -478,7 +478,10 @@ export type Database = {
           description: string | null
           id: string
           join_code: string
+<<<<<<< Updated upstream
           match_id: string | null
+=======
+>>>>>>> Stashed changes
           max_members: number
           name: string
           project_idea: string | null
@@ -492,7 +495,10 @@ export type Database = {
           description?: string | null
           id?: string
           join_code?: string
+<<<<<<< Updated upstream
           match_id?: string | null
+=======
+>>>>>>> Stashed changes
           max_members?: number
           name: string
           project_idea?: string | null
@@ -506,7 +512,10 @@ export type Database = {
           description?: string | null
           id?: string
           join_code?: string
+<<<<<<< Updated upstream
           match_id?: string | null
+=======
+>>>>>>> Stashed changes
           max_members?: number
           name?: string
           project_idea?: string | null
@@ -612,6 +621,7 @@ export type Database = {
         Args: { p_join_code: string }
         Returns: string
       }
+<<<<<<< Updated upstream
       create_team_with_initial_members: {
         Args: {
           p_creator_id: string
@@ -627,6 +637,8 @@ export type Database = {
         }
         Returns: string
       }
+=======
+>>>>>>> Stashed changes
       create_user_like_and_match: {
         Args: { p_target_user_id: string }
         Returns: {

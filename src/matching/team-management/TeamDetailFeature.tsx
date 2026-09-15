@@ -216,6 +216,8 @@ const styles = StyleSheet.create({
   section: { gap: Spacing.three },
   codeBlock: { gap: Spacing.one, paddingTop: Spacing.two },
   code: { letterSpacing: 4 },
+  codeBlock: { gap: Spacing.one, paddingTop: Spacing.two },
+  code: { letterSpacing: 4 },
   joinCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' },
   joinTitle: { fontSize: 20, lineHeight: 26, fontWeight: '700' },
   memberCard: { minHeight: 180 },
