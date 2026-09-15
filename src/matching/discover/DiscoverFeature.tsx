@@ -1,4 +1,5 @@
 import { Image } from "expo-image";
+import { BlurView } from "expo-blur";
 import { StatusBar } from "expo-status-bar";
 import {
     useCallback,
@@ -12,6 +13,7 @@ import {
 import {
     Animated,
     Dimensions,
+    Easing,
     Modal,
     PanResponder,
     Pressable,
@@ -161,7 +163,8 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
 
             Animated.timing(position, {
                 toValue: { x: direction * (screenWidth + 80), y: 0 },
-                duration: 230,
+                duration: 300,
+                easing: Easing.out(Easing.cubic),
                 useNativeDriver: true,
             }).start(({ finished }) => {
                 if (!finished) {
@@ -182,10 +185,12 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     const resetCard = useCallback(() =>
         Animated.spring(position, {
             toValue: { x: 0, y: 0 },
+            stiffness: 220,
+            damping: 22,
+            mass: 0.8,
             useNativeDriver: true,
         }).start(), [position]);
     const handleLike = useCallback(async () => {
-        resetCard();
         if (!activeCard || !targetUserId || isSwiping || isSubmittingLike) return;
 
         const result = await submitLike(targetUserId);
@@ -202,7 +207,6 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
         finishSwipe,
         isSubmittingLike,
         isSwiping,
-        resetCard,
         submitLike,
         targetUserId,
     ]);
@@ -521,26 +525,36 @@ function ActionButton({
     disabled?: boolean;
 }) {
     return (
-        <Pressable
-            accessibilityLabel={accessibilityLabel}
-            onPress={onPress}
-            disabled={disabled}
+        <BlurView
+            intensity={78}
+            tint="light"
             style={[
-                styles.actionButton,
+                styles.actionGlass,
                 size === "large" ? styles.actionLarge : styles.actionSmall,
                 disabled && styles.actionButtonDisabled,
             ]}
         >
-            <Text
-                style={[
-                    styles.actionIcon,
-                    { color },
-                    size === "large" && styles.actionIconLarge,
+            <Pressable
+                accessibilityLabel={accessibilityLabel}
+                accessibilityRole="button"
+                onPress={onPress}
+                disabled={disabled}
+                style={({ pressed }) => [
+                    styles.actionButton,
+                    pressed && styles.actionButtonPressed,
                 ]}
             >
-                {label}
-            </Text>
-        </Pressable>
+                <Text
+                    style={[
+                        styles.actionIcon,
+                        { color },
+                        size === "large" && styles.actionIconLarge,
+                    ]}
+                >
+                    {label}
+                </Text>
+            </Pressable>
+        </BlurView>
     );
 }
 const styles = StyleSheet.create({
@@ -611,7 +625,7 @@ const styles = StyleSheet.create({
         marginTop: "auto",
         padding: 22,
         paddingTop: 20,
-        paddingBottom: 100,
+        paddingBottom: 184,
         backgroundColor: "rgba(20, 15, 13, 0.44)",
     },
     nameRow: {
@@ -665,12 +679,13 @@ const styles = StyleSheet.create({
     actions: {
         position: "absolute",
         zIndex: 10,
-        left: 16,
-        right: 16,
-        bottom: 16,
+        left: 22,
+        right: 22,
+        bottom: 94,
+        minHeight: 70,
         flexDirection: "row",
         alignItems: "center",
-        justifyContent: "space-between",
+        justifyContent: "space-around",
     },
     likeMessage: {
         position: "absolute",
@@ -697,16 +712,29 @@ const styles = StyleSheet.create({
         gap: 15,
     },
     actionButton: {
-        backgroundColor: "#fff",
+        flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        boxShadow: "0px 5px 12px rgba(133, 110, 93, 0.28)",
-        elevation: 6,
+        backgroundColor: "rgba(255,255,255,0.20)",
+    },
+    actionGlass: {
+        overflow: "hidden",
+        marginHorizontal: 8,
+        borderRadius: 32,
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.72)",
+        backgroundColor: "rgba(255,255,255,0.18)",
+        boxShadow: "0px 7px 18px rgba(20, 15, 13, 0.22)",
+        elevation: 8,
+    },
+    actionButtonPressed: {
+        transform: [{ scale: 0.9 }],
+        opacity: 0.78,
     },
     actionButtonDisabled: {
         opacity: 0.5,
     },
-    actionSmall: { width: 48, height: 48, borderRadius: 24 },
+    actionSmall: { width: 62, height: 62, borderRadius: 31 },
     actionLarge: { width: 62, height: 62, borderRadius: 31 },
     actionIcon: { fontSize: 26, fontWeight: "400", lineHeight: 30 },
     actionIconLarge: { fontSize: 37, lineHeight: 40 },
