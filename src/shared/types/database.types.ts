@@ -477,6 +477,7 @@ export type Database = {
           created_by: string | null
           description: string | null
           id: string
+          match_id: string | null
           max_members: number
           name: string
           project_idea: string | null
@@ -489,6 +490,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          match_id?: string | null
           max_members?: number
           name: string
           project_idea?: string | null
@@ -501,6 +503,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          match_id?: string | null
           max_members?: number
           name?: string
           project_idea?: string | null
@@ -514,6 +517,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "matches"
             referencedColumns: ["id"]
           },
         ]
@@ -595,6 +605,21 @@ export type Database = {
         }
         Returns: string
       }
+      create_team_with_initial_members: {
+        Args: {
+          p_creator_id: string
+          p_creator_role: string
+          p_description: string
+          p_initial_member_ids: string[]
+          p_match_id: string
+          p_max_members: number
+          p_name: string
+          p_project_idea: string
+          p_repo_url: string
+          p_tech_stack: string[]
+        }
+        Returns: string
+      }
       create_user_like_and_match: {
         Args: { p_target_user_id: string }
         Returns: {
@@ -604,6 +629,8 @@ export type Database = {
           match_id: string | null
           matched: boolean
           swipe_id: string
+          team_created: boolean
+          team_id: string | null
           target_user_id: string
         }[]
       }

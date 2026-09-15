@@ -34,6 +34,7 @@ test(
       displayName: `Mutual Match ${index}`,
       id: undefined,
     }));
+    const createdTeamIds = new Set();
 
     try {
       for (const user of users) {
@@ -79,18 +80,25 @@ test(
       assert.equal(oneSided.data.matched, false);
       assert.equal(oneSided.data.match_created, false);
       assert.equal(oneSided.data.match_id, null);
+      assert.equal(oneSided.data.team_created, false);
+      assert.equal(oneSided.data.team_id, null);
 
       const reciprocal = await like(1, 0);
       assert.ifError(reciprocal.error);
       assert.equal(reciprocal.data.matched, true);
       assert.equal(reciprocal.data.match_created, true);
       assert.ok(reciprocal.data.match_id);
+      assert.equal(reciprocal.data.team_created, true);
+      assert.ok(reciprocal.data.team_id);
+      createdTeamIds.add(reciprocal.data.team_id);
 
       const retry = await like(0, 1);
       assert.ifError(retry.error);
       assert.equal(retry.data.matched, true);
       assert.equal(retry.data.match_created, false);
       assert.equal(retry.data.match_id, reciprocal.data.match_id);
+      assert.equal(retry.data.team_created, false);
+      assert.equal(retry.data.team_id, reciprocal.data.team_id);
 
       const canonicalPair = [users[0].id, users[1].id].sort();
       const { data: ordinaryMatches, error: ordinaryMatchError } = await admin
@@ -101,6 +109,26 @@ test(
       assert.ifError(ordinaryMatchError);
       assert.equal(ordinaryMatches.length, 1);
       assert.equal(ordinaryMatches[0].status, "active");
+
+      const { data: ordinaryTeams, error: ordinaryTeamError } = await admin
+        .from("teams")
+        .select("id,match_id,max_members,created_by")
+        .eq("match_id", reciprocal.data.match_id);
+      assert.ifError(ordinaryTeamError);
+      assert.equal(ordinaryTeams.length, 1);
+      assert.equal(ordinaryTeams[0].id, reciprocal.data.team_id);
+      assert.equal(ordinaryTeams[0].max_members, 4);
+      assert.equal(ordinaryTeams[0].created_by, users[1].id);
+
+      const { data: ordinaryMembers, error: ordinaryMembersError } = await admin
+        .from("team_members")
+        .select("user_id")
+        .eq("team_id", reciprocal.data.team_id);
+      assert.ifError(ordinaryMembersError);
+      assert.deepEqual(
+        ordinaryMembers.map((member) => member.user_id).sort(),
+        [users[0].id, users[1].id].sort(),
+      );
 
       const { error: passError } = await admin.from("swipes").insert({
         actor_type: "user",
@@ -137,6 +165,8 @@ test(
       assert.equal(inactiveResult.data.matched, false);
       assert.equal(inactiveResult.data.match_created, false);
       assert.equal(inactiveResult.data.match_id, null);
+      assert.equal(inactiveResult.data.team_created, false);
+      assert.equal(inactiveResult.data.team_id, null);
 
       const [concurrentA, concurrentB] = await Promise.all([
         like(4, 5),
@@ -156,6 +186,30 @@ test(
       assert.ifError(concurrentMatchError);
       assert.equal(concurrentMatches.length, 1);
       assert.equal(concurrentMatches[0].status, "active");
+
+      const concurrentResult = concurrentA.data.team_created
+        ? concurrentA.data
+        : concurrentB.data;
+      assert.equal(concurrentResult.team_created, true);
+      assert.ok(concurrentResult.team_id);
+      createdTeamIds.add(concurrentResult.team_id);
+
+      const { data: concurrentTeams, error: concurrentTeamError } = await admin
+        .from("teams")
+        .select("id,match_id,max_members")
+        .eq("match_id", concurrentMatches[0].id);
+      assert.ifError(concurrentTeamError);
+      assert.equal(concurrentTeams.length, 1);
+      assert.equal(concurrentTeams[0].id, concurrentResult.team_id);
+      assert.equal(concurrentTeams[0].max_members, 4);
+
+      const { count: concurrentMemberCount, error: concurrentMemberError } =
+        await admin
+          .from("team_members")
+          .select("*", { count: "exact", head: true })
+          .eq("team_id", concurrentResult.team_id);
+      assert.ifError(concurrentMemberError);
+      assert.equal(concurrentMemberCount, 2);
 
       const anonymous = clientFor(anonKey);
       const { error: anonymousError } = await anonymous.rpc(
@@ -185,6 +239,9 @@ test(
       );
       assert.match(missingTargetError?.message ?? "", /Target profile does not exist/i);
     } finally {
+      if (createdTeamIds.size) {
+        await admin.from("teams").delete().in("id", [...createdTeamIds]);
+      }
       await Promise.allSettled(
         users
           .filter((user) => user.id)
