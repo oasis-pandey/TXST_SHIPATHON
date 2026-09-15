@@ -55,14 +55,84 @@ type ActiveCard<T> = {
 export function DiscoverFeature() {
     const [mode, setMode] = useState<"people" | "teams">("people");
 
-    return mode === "people" ? (
-        <UserDiscoverView onSwitch={() => setMode("teams")} />
-    ) : (
-        <TeamDiscoverView onSwitch={() => setMode("people")} />
+    return (
+        <View style={styles.page}>
+            {mode === "people" ? <UserDiscoverView /> : <TeamDiscoverView />}
+            <DiscoveryModeSwitch mode={mode} onChange={setMode} />
+        </View>
     );
 }
 
-function UserDiscoverView({ onSwitch }: { onSwitch: () => void }) {
+function DiscoveryModeSwitch({
+    mode,
+    onChange,
+}: {
+    mode: "people" | "teams";
+    onChange: (mode: "people" | "teams") => void;
+}) {
+    const [position] = useState(() => new Animated.Value(mode === "teams" ? 1 : 0));
+
+    useEffect(() => {
+        Animated.spring(position, {
+            toValue: mode === "teams" ? 1 : 0,
+            damping: 20,
+            stiffness: 260,
+            mass: 0.7,
+            useNativeDriver: true,
+        }).start();
+    }, [mode, position]);
+
+    const translateX = position.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, 88],
+    });
+
+    return (
+        <SafeAreaView
+            edges={["top"]}
+            pointerEvents="box-none"
+            style={styles.discoverySwitchContainer}
+        >
+            <View accessibilityRole="tablist" style={styles.discoverySwitch}>
+                <Animated.View
+                    pointerEvents="none"
+                    style={[
+                        styles.discoverySwitchIndicator,
+                        { transform: [{ translateX }] },
+                    ]}
+                />
+                <Pressable
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: mode === "people" }}
+                    onPress={() => onChange("people")}
+                    style={styles.discoverySwitchOption}
+                >
+                    <Text style={[
+                        styles.discoverySwitchText,
+                        mode === "people" && styles.discoverySwitchTextActive,
+                    ]}>
+                        Users
+                    </Text>
+                </Pressable>
+                <Pressable
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: mode === "teams" }}
+                    onPress={() => onChange("teams")}
+                    style={styles.discoverySwitchOption}
+                >
+                    <Text style={[
+                        styles.discoverySwitchText,
+                        mode === "teams" && styles.discoverySwitchTextActive,
+                    ]}>
+                        Teams
+                    </Text>
+                </Pressable>
+            </View>
+        </SafeAreaView>
+    );
+}
+
+function UserDiscoverView() {
     const queue = useMemo(
         () => createReduxProfileQueue(store, "default-discover"),
         [],
@@ -101,8 +171,6 @@ function UserDiscoverView({ onSwitch }: { onSwitch: () => void }) {
                 });
             }}
             showFavorite
-            switchLabel="Find a team"
-            onSwitch={onSwitch}
             overlay={
                 <MatchOverlay
                     match={matchPresentation}
@@ -113,7 +181,7 @@ function UserDiscoverView({ onSwitch }: { onSwitch: () => void }) {
     );
 }
 
-function TeamDiscoverView({ onSwitch }: { onSwitch: () => void }) {
+function TeamDiscoverView() {
     const queue = useMemo(
         () => createReduxDiscoverQueue<TeamRecommendation>(store, "team-discover"),
         [],
@@ -144,8 +212,6 @@ function TeamDiscoverView({ onSwitch }: { onSwitch: () => void }) {
                 if (!await application.submit(team.id)) return false;
                 return advance();
             }}
-            switchLabel="Find people"
-            onSwitch={onSwitch}
         />
     );
 }
@@ -226,8 +292,6 @@ export function DiscoverView<T extends { id: string }>({
     likeError,
     isSubmittingLike = false,
     showFavorite = false,
-    switchLabel,
-    onSwitch,
     overlay,
 }: {
     queue: DiscoverQueue<T>;
@@ -241,8 +305,6 @@ export function DiscoverView<T extends { id: string }>({
     likeError?: string | null;
     isSubmittingLike?: boolean;
     showFavorite?: boolean;
-    switchLabel?: string;
-    onSwitch?: () => void;
     overlay?: ReactNode;
 }) {
     const snapshot = useSyncExternalStore(
@@ -412,18 +474,6 @@ export function DiscoverView<T extends { id: string }>({
         <View style={styles.page}>
             <StatusBar style="dark" />
             <SafeAreaView style={styles.safeArea} edges={["top"]}>
-                {switchLabel && onSwitch && (
-                    <View pointerEvents="box-none" style={styles.header}>
-                        <Pressable
-                            accessibilityLabel={switchLabel}
-                            accessibilityRole="button"
-                            onPress={onSwitch}
-                            style={styles.teamToggle}
-                        >
-                            <Text style={styles.teamToggleText}>{switchLabel}</Text>
-                        </Pressable>
-                    </View>
-                )}
                 <View style={styles.deck}>
                     {snapshot.next && (
                         <Animated.View
@@ -770,17 +820,48 @@ const styles = StyleSheet.create({
         color: "#564A42",
         transform: [{ rotate: "90deg" }],
     },
-    teamToggle: {
-        marginLeft: "auto",
-        borderRadius: 20,
-        backgroundColor: "rgba(255,255,255,0.9)",
-        paddingHorizontal: 14,
-        paddingVertical: 10,
+    discoverySwitchContainer: {
+        position: "absolute",
+        zIndex: 20,
+        top: 0,
+        left: 0,
+        right: 0,
+        alignItems: "center",
     },
-    teamToggleText: {
-        color: "#564A42",
-        fontSize: 14,
+    discoverySwitch: {
+        width: 184,
+        height: 44,
+        marginTop: 8,
+        padding: 4,
+        flexDirection: "row",
+        borderRadius: 22,
+        backgroundColor: "rgba(255,255,255,0.72)",
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.82)",
+    },
+    discoverySwitchIndicator: {
+        position: "absolute",
+        top: 4,
+        left: 4,
+        width: 88,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: "#FFFFFF",
+        boxShadow: "0px 3px 8px rgba(37, 27, 23, 0.18)",
+        elevation: 3,
+    },
+    discoverySwitchOption: {
+        width: 88,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    discoverySwitchText: {
+        color: "#75675F",
+        fontSize: 13,
         fontWeight: "700",
+    },
+    discoverySwitchTextActive: {
+        color: "#342A25",
     },
     progressRow: {
         position: "absolute",
