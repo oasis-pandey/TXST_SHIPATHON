@@ -36,7 +36,7 @@ export type TeamWithMembership = Team & {
 };
 
 export type TeamMember = TeamMemberRow & {
-  profile: ProfileSummary | null;
+  profile: ApplicantProfile | null;
 };
 
 export type ProposalWithDetails = Omit<TeamProposalRow, 'proposal_type'> & {

@@ -1,6 +1,7 @@
 import { requireSupabase } from '@/shared/lib/supabase';
 
 import type {
+  ApplicantProfile,
   CandidateResponse,
   ProfileSummary,
   ProposalDecision,
@@ -81,7 +82,13 @@ export async function getTeam(teamId: string): Promise<Team> {
 export async function getTeamRoster(teamId: string): Promise<TeamMember[]> {
   const { data, error } = await requireSupabase()
     .from('team_members')
-    .select('*, profiles(id, display_name, avatar_url, preferred_roles, tech_stack)')
+    .select(`
+      *,
+      profiles(
+        id, display_name, avatar_url, bio, github_url, skill_level, availability,
+        preferred_roles, tech_stack, interests
+      )
+    `)
     .eq('team_id', teamId)
     .order('joined_at');
   if (error) throw error;
@@ -91,7 +98,7 @@ export async function getTeamRoster(teamId: string): Promise<TeamMember[]> {
     user_id: member.user_id,
     role: member.role,
     joined_at: member.joined_at,
-    profile: member.profiles as ProfileSummary | null,
+    profile: member.profiles as ApplicantProfile | null,
   }));
 }
 

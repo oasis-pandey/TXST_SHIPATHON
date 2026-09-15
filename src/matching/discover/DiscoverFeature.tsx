@@ -40,7 +40,8 @@ import {
     requestTeamRecommendations,
     type TeamRecommendation,
 } from "@/matching/data-access/team-recommendation-service";
-import { applyToTeam } from "@/matching/data-access/team-service";
+import { applyToTeam, getTeamRoster } from "@/matching/data-access/team-service";
+import type { TeamMember } from "@/matching/data-access/team-types";
 
 const { width: screenWidth } = Dimensions.get("window");
 const SWIPE_THRESHOLD = 110;
@@ -193,14 +194,7 @@ function TeamDiscoverView() {
         <DiscoverView
             queue={queue}
             renderCard={(team, expanded) => (
-                <DiscoverCard
-                    imageUrl={null}
-                    title={team.name}
-                    subtitle={`Up to ${team.max_members} members`}
-                    tags={team.tech_stack}
-                    description={[team.description, team.project_idea].filter(Boolean).join("\n\n")}
-                    expanded={expanded}
-                />
+                <TeamDiscoveryCard team={team} expanded={expanded} />
             )}
             loadingMessage="Finding teams nearby…"
             emptyCopy="More teams will appear here soon."
@@ -213,6 +207,82 @@ function TeamDiscoverView() {
                 return advance();
             }}
         />
+    );
+}
+
+function TeamDiscoveryCard({
+    team,
+    expanded,
+}: {
+    team: TeamRecommendation;
+    expanded: boolean;
+}) {
+    const [members, setMembers] = useState<TeamMember[]>([]);
+    const [memberIndex, setMemberIndex] = useState(0);
+
+    useEffect(() => {
+        let active = true;
+
+        void getTeamRoster(team.id)
+            .then((roster) => {
+                if (active) setMembers(roster);
+            })
+            .catch(() => {});
+
+        return () => {
+            active = false;
+        };
+    }, [team]);
+
+    const handlePress = useCallback((locationX: number) => {
+        if (!members.length) return;
+        if (locationX < screenWidth * 0.3) {
+            setMemberIndex((index) => Math.max(0, index - 1));
+            return;
+        }
+        setMemberIndex((index) => Math.min(members.length - 1, index + 1));
+    }, [members.length]);
+    const member = members[memberIndex];
+    const profile = member?.profile;
+
+    return (
+        <Pressable
+            accessibilityHint="Tap the right side for the next profile or the left side to go back"
+            accessibilityLabel={`${profile?.display_name ?? "Developer"}, member ${memberIndex + 1} of ${members.length}`}
+            accessibilityRole="button"
+            onPress={(event) => handlePress(event.nativeEvent.locationX)}
+            style={styles.teamSequence}
+        >
+            <DiscoverCard
+                imageUrl={profile?.avatar_url}
+                title={team.name}
+                subtitle={[
+                    members.length
+                        ? `${profile?.display_name ?? "Developer"} · Member ${memberIndex + 1} of ${members.length}`
+                        : "Loading members…",
+                    member?.role || (members.length ? "Member" : null),
+                    profile?.skill_level,
+                    profile?.availability,
+                ].filter(Boolean).join(" · ")}
+                tags={[
+                    ...(profile?.tech_stack ?? team.tech_stack),
+                    ...(profile?.preferred_roles ?? []),
+                ]}
+                description={[
+                    profile?.bio ?? team.description,
+                    profile?.interests.length
+                        ? `Interests: ${profile.interests.join(", ")}`
+                        : null,
+                    profile?.github_url ? `GitHub: ${profile.github_url}` : null,
+                ].filter(Boolean).join("\n\n")}
+                expanded={expanded || Boolean(member)}
+            />
+            <Text pointerEvents="none" style={styles.teamSequenceHint}>
+                {memberIndex < members.length - 1
+                    ? "← Back · Tap for next →"
+                    : members.length > 1 ? "← Tap left to go back" : ""}
+            </Text>
+        </Pressable>
     );
 }
 
@@ -634,16 +704,14 @@ function MatchOverlay({
                     >
                         It’s a Match
                     </Text>
-                    <Image
-                        accessibilityLabel={`${match.displayName} profile photo`}
-                        contentFit="cover"
-                        source={{
-                            uri:
-                                match.avatarUrl ??
-                                "https://placehold.co/320x320/png",
-                        }}
-                        style={styles.matchAvatar}
-                    />
+                    {match.avatarUrl && (
+                        <Image
+                            accessibilityLabel={`${match.displayName} profile photo`}
+                            contentFit="cover"
+                            source={{ uri: match.avatarUrl }}
+                            style={styles.matchAvatar}
+                        />
+                    )}
                     <Text style={styles.matchName}>{match.displayName}</Text>
                     <Text style={styles.matchCopy}>
                         You both want to build something great together.
@@ -688,6 +756,21 @@ function ProfileCard({
     );
 }
 
+function CardImage({ imageUrl }: { imageUrl: string }) {
+    const [failed, setFailed] = useState(false);
+
+    if (failed) return null;
+
+    return (
+        <Image
+            source={{ uri: imageUrl }}
+            style={styles.photo}
+            contentFit="cover"
+            onError={() => setFailed(true)}
+        />
+    );
+}
+
 export function DiscoverCard({
     imageUrl,
     title,
@@ -707,11 +790,9 @@ export function DiscoverCard({
 }) {
     return (
         <View style={[styles.cardInner, style]}>
-            <Image
-                source={{ uri: imageUrl ?? "https://placehold.co/1100x1600/png" }}
-                style={styles.photo}
-                contentFit="cover"
-            />
+            {imageUrl && (
+                <CardImage key={imageUrl} imageUrl={imageUrl} />
+            )}
             <View style={styles.photoTint} />
             <View style={styles.cardContent}>
                 <View style={styles.nameRow}>
@@ -917,6 +998,18 @@ const styles = StyleSheet.create({
     },
     tagText: { color: "#fff", fontSize: 12, fontWeight: "600" },
     bio: { color: "#fff", fontSize: 13, lineHeight: 19, marginTop: 14 },
+    teamSequence: { flex: 1 },
+    teamSequenceHint: {
+        position: "absolute",
+        left: 22,
+        right: 22,
+        bottom: 168,
+        zIndex: 3,
+        color: "rgba(255,255,255,0.86)",
+        fontSize: 12,
+        fontWeight: "700",
+        textAlign: "center",
+    },
     stamp: {
         position: "absolute",
         top: 116,
