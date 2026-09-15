@@ -8,8 +8,8 @@ import {
   getTeamMemberCounts,
   listCandidateProposals,
   listMyTeams,
+  listReceivedTeamApplications,
   listTeamNotifications,
-  listTeams,
 } from '@/matching/data-access/team-service';
 import type { Team, TeamWithMembership } from '@/matching/data-access/team-types';
 import {
@@ -33,8 +33,8 @@ import { isSupabaseConfigured } from '@/shared/lib/supabase';
 
 type TeamsHomeData = {
   mine: TeamWithMembership[];
-  discoverable: Team[];
   candidateProposals: Awaited<ReturnType<typeof listCandidateProposals>>;
+  receivedApplications: Awaited<ReturnType<typeof listReceivedTeamApplications>>;
   memberCounts: Record<string, number>;
   unreadNotifications: number;
 };
@@ -81,29 +81,18 @@ function TeamCard({
 
 export default function TeamsHomeScreen() {
   const loader = useCallback(async (): Promise<TeamsHomeData> => {
-    const [mine, teams, candidateProposals, notifications] = await Promise.all([
+    const [mine, candidateProposals, receivedApplications, notifications] = await Promise.all([
       listMyTeams(),
-      listTeams(),
       listCandidateProposals(),
+      listReceivedTeamApplications(),
       listTeamNotifications(),
     ]);
-    const memberCounts = await getTeamMemberCounts(teams.map((team) => team.id));
-    const mineIds = new Set(mine.map((team) => team.id));
-    const pendingApplicationTeamIds = new Set(
-      candidateProposals
-        .filter(
-          (proposal) =>
-            proposal.proposal_type === 'user_swiped_team' && proposal.status === 'pending',
-        )
-        .map((proposal) => proposal.team_id),
-    );
+    const memberCounts = await getTeamMemberCounts(mine.map((team) => team.id));
 
     return {
       mine,
-      discoverable: teams.filter(
-        (team) => !mineIds.has(team.id) && !pendingApplicationTeamIds.has(team.id),
-      ),
       candidateProposals,
+      receivedApplications,
       memberCounts,
       unreadNotifications: notifications.filter((notification) => !notification.read).length,
     };
@@ -133,6 +122,7 @@ export default function TeamsHomeScreen() {
     (proposal) =>
       proposal.status === 'pending' && proposal.proposal_type === 'user_swiped_team',
   ) ?? [];
+  const receivedApplications = resource.data?.receivedApplications ?? [];
 
   return (
     <TeamScreen>
@@ -161,7 +151,7 @@ export default function TeamsHomeScreen() {
           <View style={styles.summaryRow}>
             <Metric label="current teams" value={resource.data.mine.length} />
             <Metric label="pending applications" value={pendingApplications.length} />
-            <Metric label="needs your response" value={pendingProposals.length} />
+            <Metric label="needs your response" value={pendingProposals.length + receivedApplications.length} />
             <Metric label="unread updates" value={resource.data.unreadNotifications} />
           </View>
 
@@ -252,6 +242,46 @@ export default function TeamsHomeScreen() {
             </View>
           )}
 
+          {receivedApplications.length > 0 && (
+            <View style={styles.section}>
+              <SectionHeader title="Team applications" />
+              <ThemedText themeColor="textSecondary" style={styles.sectionCopy}>
+                Review applicants for your teams and cast your vote.
+              </ThemedText>
+              <TeamGrid>
+                {receivedApplications.map((proposal) => (
+                  <Link
+                    key={proposal.id}
+                    href={{
+                      pathname: '/teams/[teamId]/proposals/[proposalId]',
+                      params: { teamId: proposal.team_id, proposalId: proposal.id },
+                    }}
+                    asChild>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Review ${proposal.candidate?.display_name ?? 'applicant'} for ${proposal.team?.name ?? 'team'}`}
+                      style={({ pressed }) => pressed && styles.pressed}>
+                      <Card style={styles.applicationCard}>
+                        <View style={teamStyles.spread}>
+                          <ThemedText style={styles.cardTitle} numberOfLines={1}>
+                            {proposal.candidate?.display_name ?? 'New applicant'}
+                          </ThemedText>
+                          <StatusPill value={proposal.status} />
+                        </View>
+                        <ThemedText type="smallBold">
+                          {proposal.team?.name ?? 'Your team'}
+                        </ThemedText>
+                        <ThemedText themeColor="textSecondary">
+                          Review the application and cast your vote.
+                        </ThemedText>
+                      </Card>
+                    </Pressable>
+                  </Link>
+                ))}
+              </TeamGrid>
+            </View>
+          )}
+
           <View style={styles.section}>
             <SectionHeader
               title="Your teams"
@@ -273,27 +303,7 @@ export default function TeamsHomeScreen() {
                 ))}
               </TeamGrid>
             ) : (
-              <EmptyState>You are not on a team yet. Create one or explore open teams below.</EmptyState>
-            )}
-          </View>
-
-          <View style={styles.section}>
-            <SectionHeader title="Looking for a team" />
-            <ThemedText themeColor="textSecondary" style={styles.sectionCopy}>
-              Explore teams you have not joined yet. Open a card to learn more and apply.
-            </ThemedText>
-            {resource.data.discoverable.length ? (
-              <TeamGrid>
-                {resource.data.discoverable.map((team) => (
-                  <TeamCard
-                    key={team.id}
-                    team={team}
-                    memberCount={resource.data!.memberCounts[team.id] ?? 0}
-                  />
-                ))}
-              </TeamGrid>
-            ) : (
-              <EmptyState>No other teams are available right now.</EmptyState>
+              <EmptyState>You are not on a team yet. Create one to get started.</EmptyState>
             )}
           </View>
         </>

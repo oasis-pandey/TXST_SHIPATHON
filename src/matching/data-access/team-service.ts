@@ -196,6 +196,12 @@ export async function createProposal(
   return proposalType === 'user_swiped_team' ? ensureApplicationConsent(data) : data;
 }
 
+/** Submit the current user's application for a team from team discovery. */
+export async function applyToTeam(teamId: string) {
+  const userId = await getCurrentUserId();
+  return createProposal(teamId, userId, 'user_swiped_team');
+}
+
 const proposalSelect = `
   *,
   candidate:profiles!team_membership_proposals_candidate_user_id_fkey(
@@ -222,6 +228,18 @@ export async function listCandidateProposals(): Promise<ProposalWithDetails[]> {
     .from('team_membership_proposals')
     .select(proposalSelect)
     .eq('candidate_user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as unknown as ProposalWithDetails[];
+}
+
+/** Pending applications submitted to any team the current user belongs to. */
+export async function listReceivedTeamApplications(): Promise<ProposalWithDetails[]> {
+  const { data, error } = await requireSupabase()
+    .from('team_membership_proposals')
+    .select(proposalSelect)
+    .eq('proposal_type', 'user_swiped_team')
+    .eq('status', 'pending')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as unknown as ProposalWithDetails[];

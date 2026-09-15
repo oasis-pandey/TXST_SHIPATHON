@@ -20,9 +20,9 @@ export type UserRecommendationProfile = {
   updated_at: string;
 };
 
-export type ProfileQueueSnapshot = {
-  current: UserRecommendationProfile | undefined;
-  next: UserRecommendationProfile | undefined;
+export type DiscoverQueueSnapshot<T> = {
+  current: T | undefined;
+  next: T | undefined;
   length: number;
   position: number;
   isReady: boolean;
@@ -32,11 +32,14 @@ export type ProfileQueueSnapshot = {
  * The discover view only needs this small queue contract. A local list,
  * paginated API, or a mode-specific matcher can implement the same interface.
  */
-export interface ProfileQueue {
-  getSnapshot(): ProfileQueueSnapshot;
+export interface DiscoverQueue<T extends { id: string }> {
+  getSnapshot(): DiscoverQueueSnapshot<T>;
   advance(expectedPosition: number): void;
-  append(profiles: readonly UserRecommendationProfile[]): void;
+  append(profiles: readonly T[]): void;
   reset(): void;
-  replace(profiles: readonly UserRecommendationProfile[]): void;
+  replace(profiles: readonly T[]): void;
   subscribe(listener: () => void): () => void;
 }
+
+export type ProfileQueueSnapshot = DiscoverQueueSnapshot<UserRecommendationProfile>;
+export type ProfileQueue = DiscoverQueue<UserRecommendationProfile>;

@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
-import { BlurView } from "expo-blur";
 import { StatusBar } from "expo-status-bar";
 import {
+    type ReactNode,
     useCallback,
     useEffect,
     useLayoutEffect,
@@ -24,10 +24,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
+    type DiscoverQueue,
     type UserRecommendationProfile,
-    type ProfileQueue,
 } from "@/matching/data-access/profile-queue";
-import { createReduxProfileQueue } from "@/matching/data-access/redux-profile-queue";
+import { createReduxDiscoverQueue, createReduxProfileQueue } from "@/matching/data-access/redux-profile-queue";
 import { store } from "@/shared/data-access/store";
 import { requestUserRecommendations } from "@/matching/data-access/user-recommendation-service";
 import {
@@ -36,26 +36,215 @@ import {
 } from "@/matching/swipe/match-presentation";
 import { getSwipeIntent } from "@/matching/swipe/swipe-intent";
 import { useLikeDeveloper } from "@/matching/swipe/use-like-developer";
+import {
+    requestTeamRecommendations,
+    type TeamRecommendation,
+} from "@/matching/data-access/team-recommendation-service";
+import { applyToTeam } from "@/matching/data-access/team-service";
 
 const { width: screenWidth } = Dimensions.get("window");
 const SWIPE_THRESHOLD = 110;
 const MINIMUM_REMAINING_RECOMMENDATIONS = 3;
 
-type ActiveCard = {
-    profile: UserRecommendationProfile;
+type ActiveCard<T> = {
+    profile: T;
     queuePosition: number;
     position: Animated.ValueXY;
 };
 
 export function DiscoverFeature() {
+    const [mode, setMode] = useState<"people" | "teams">("people");
+
+    return mode === "people" ? (
+        <UserDiscoverView onSwitch={() => setMode("teams")} />
+    ) : (
+        <TeamDiscoverView onSwitch={() => setMode("people")} />
+    );
+}
+
+function UserDiscoverView({ onSwitch }: { onSwitch: () => void }) {
     const queue = useMemo(
         () => createReduxProfileQueue(store, "default-discover"),
         [],
     );
-    return <DiscoverView queue={queue} />;
+    const recommendations = useRecommendations(queue, requestUserRecommendations);
+    const {
+        clearError: clearLikeError,
+        error: likeError,
+        isSubmitting: isSubmittingLike,
+        submitLike,
+    } = useLikeDeveloper();
+    const [matchPresentation, setMatchPresentation] =
+        useState<MatchPresentation | null>(null);
+
+    return (
+        <DiscoverView
+            queue={queue}
+            renderCard={(profile, expanded) => (
+                <ProfileCard profile={profile} expanded={expanded} />
+            )}
+            loadingMessage="Finding people nearby…"
+            emptyCopy="New people will appear here when they&apos;re nearby."
+            error={recommendations.error}
+            onRetry={recommendations.retry}
+            clearLikeError={clearLikeError}
+            likeError={likeError}
+            isSubmittingLike={isSubmittingLike}
+            onLike={async (profile, advance) => {
+                const result = await submitLike(profile.id);
+                if (!result) return false;
+                return completeSuccessfulLike({
+                    result,
+                    profile,
+                    advance,
+                    present: setMatchPresentation,
+                });
+            }}
+            showFavorite
+            switchLabel="Find a team"
+            onSwitch={onSwitch}
+            overlay={
+                <MatchOverlay
+                    match={matchPresentation}
+                    onDismiss={() => setMatchPresentation(null)}
+                />
+            }
+        />
+    );
 }
 
-export function DiscoverView({ queue }: { queue: ProfileQueue }) {
+function TeamDiscoverView({ onSwitch }: { onSwitch: () => void }) {
+    const queue = useMemo(
+        () => createReduxDiscoverQueue<TeamRecommendation>(store, "team-discover"),
+        [],
+    );
+    const recommendations = useRecommendations(queue, requestTeamRecommendations);
+    const application = useTeamApplication();
+
+    return (
+        <DiscoverView
+            queue={queue}
+            renderCard={(team, expanded) => (
+                <DiscoverCard
+                    imageUrl={null}
+                    title={team.name}
+                    subtitle={`Up to ${team.max_members} members`}
+                    tags={team.tech_stack}
+                    description={[team.description, team.project_idea].filter(Boolean).join("\n\n")}
+                    expanded={expanded}
+                />
+            )}
+            loadingMessage="Finding teams nearby…"
+            emptyCopy="More teams will appear here soon."
+            error={recommendations.error}
+            onRetry={recommendations.retry}
+            likeError={application.error}
+            isSubmittingLike={application.isSubmitting}
+            onLike={async (team, advance) => {
+                if (!await application.submit(team.id)) return false;
+                return advance();
+            }}
+            switchLabel="Find people"
+            onSwitch={onSwitch}
+        />
+    );
+}
+
+function useTeamApplication() {
+    const inFlight = useRef(false);
+    const [error, setError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const submit = useCallback(async (teamId: string) => {
+        if (inFlight.current) return false;
+
+        inFlight.current = true;
+        setIsSubmitting(true);
+        setError(null);
+        try {
+            await applyToTeam(teamId);
+            return true;
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "Unable to send your application.");
+            return false;
+        } finally {
+            inFlight.current = false;
+            setIsSubmitting(false);
+        }
+    }, []);
+
+    return { error, isSubmitting, submit };
+}
+
+function useRecommendations<T extends { id: string }>(
+    queue: DiscoverQueue<T>,
+    requestRecommendations: () => Promise<readonly T[]>,
+) {
+    const snapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot, queue.getSnapshot);
+    const [error, setError] = useState<string | null>(null);
+    const [attempt, setAttempt] = useState(0);
+    const requestInProgress = useRef(false);
+    const isInitialRequest = useRef(true);
+
+    useEffect(() => {
+        const shouldRequest =
+            isInitialRequest.current ||
+            snapshot.length - snapshot.position < MINIMUM_REMAINING_RECOMMENDATIONS;
+        if (!shouldRequest || requestInProgress.current) return;
+
+        requestInProgress.current = true;
+        void requestRecommendations()
+            .then((items) => {
+                if (isInitialRequest.current) {
+                    queue.replace(items);
+                    isInitialRequest.current = false;
+                } else {
+                    queue.append(items);
+                }
+                setError(null);
+            })
+            .catch((cause: unknown) => {
+                setError(cause instanceof Error ? cause.message : "Could not load recommendations.");
+            })
+            .finally(() => {
+                requestInProgress.current = false;
+            });
+    }, [attempt, queue, requestRecommendations, snapshot.length, snapshot.position]);
+
+    return { error, retry: () => setAttempt((value) => value + 1) };
+}
+
+export function DiscoverView<T extends { id: string }>({
+    queue,
+    renderCard,
+    loadingMessage,
+    emptyCopy,
+    error,
+    onRetry,
+    onLike,
+    clearLikeError,
+    likeError,
+    isSubmittingLike = false,
+    showFavorite = false,
+    switchLabel,
+    onSwitch,
+    overlay,
+}: {
+    queue: DiscoverQueue<T>;
+    renderCard: (item: T, expanded: boolean) => ReactNode;
+    loadingMessage: string;
+    emptyCopy: string;
+    error?: string | null;
+    onRetry?: () => void;
+    onLike?: (item: T, advance: () => Promise<boolean>) => Promise<boolean | void>;
+    clearLikeError?: () => void;
+    likeError?: string | null;
+    isSubmittingLike?: boolean;
+    showFavorite?: boolean;
+    switchLabel?: string;
+    onSwitch?: () => void;
+    overlay?: ReactNode;
+}) {
     const snapshot = useSyncExternalStore(
         queue.subscribe,
         queue.getSnapshot,
@@ -63,21 +252,9 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     );
     const [isBioOpen, setIsBioOpen] = useState(true);
     const [isSwiping, setIsSwiping] = useState(false);
-    const [matchPresentation, setMatchPresentation] =
-        useState<MatchPresentation | null>(null);
-    const [recommendationError, setRecommendationError] = useState<string | null>(null);
-    const [recommendationRequestAttempt, setRecommendationRequestAttempt] = useState(0);
-    const {
-        clearError: clearLikeError,
-        error: likeError,
-        isSubmitting: isSubmittingLike,
-        submitLike,
-    } = useLikeDeveloper();
     const swipeInProgress = useRef(false);
-    const recommendationRequestInProgress = useRef(false);
-    const isInitialRecommendationRequest = useRef(true);
     const [idlePosition] = useState(() => new Animated.ValueXY());
-    const [activeCard, setActiveCard] = useState<ActiveCard | undefined>(() =>
+    const [activeCard, setActiveCard] = useState<ActiveCard<T> | undefined>(() =>
         snapshot.current
             ? {
                 profile: snapshot.current,
@@ -119,37 +296,8 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     const targetUserId = activeCard?.profile.id;
 
     useEffect(() => {
-        clearLikeError();
+        clearLikeError?.();
     }, [clearLikeError, targetUserId]);
-
-    useEffect(() => {
-        const remainingRecommendations = snapshot.length - snapshot.position;
-        const shouldRequestRecommendations =
-            isInitialRecommendationRequest.current ||
-            remainingRecommendations < MINIMUM_REMAINING_RECOMMENDATIONS;
-
-        if (!shouldRequestRecommendations || recommendationRequestInProgress.current) return;
-
-        recommendationRequestInProgress.current = true;
-        void requestUserRecommendations()
-            .then((profiles) => {
-                if (isInitialRecommendationRequest.current) {
-                    queue.replace(profiles);
-                    isInitialRecommendationRequest.current = false;
-                } else {
-                    queue.append(profiles);
-                }
-                setRecommendationError(null);
-            })
-            .catch((cause: unknown) => {
-                setRecommendationError(
-                    cause instanceof Error ? cause.message : "Could not load recommendations.",
-                );
-            })
-            .finally(() => {
-                recommendationRequestInProgress.current = false;
-            });
-    }, [queue, recommendationRequestAttempt, snapshot.length, snapshot.position]);
 
     const finishSwipe = useCallback((direction: 1 | -1) =>
         new Promise<boolean>((resolve) => {
@@ -179,9 +327,6 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                 resolve(true);
             });
         }), [activeCard, position, queue]);
-    const dismissMatch = useCallback(() => {
-        setMatchPresentation(null);
-    }, []);
     const resetCard = useCallback(() =>
         Animated.spring(position, {
             toValue: { x: 0, y: 0 },
@@ -191,24 +336,18 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
             useNativeDriver: true,
         }).start(), [position]);
     const handleLike = useCallback(async () => {
-        if (!activeCard || !targetUserId || isSwiping || isSubmittingLike) return;
-
-        const result = await submitLike(targetUserId);
-        if (!result) return;
-
-        await completeSuccessfulLike({
-            result,
-            profile: activeCard.profile,
-            advance: () => finishSwipe(1),
-            present: setMatchPresentation,
-        });
+        if (!activeCard || isSwiping || isSubmittingLike) return;
+        if (!onLike) {
+            await finishSwipe(1);
+            return;
+        }
+        await onLike(activeCard.profile, () => finishSwipe(1));
     }, [
         activeCard,
         finishSwipe,
         isSubmittingLike,
         isSwiping,
-        submitLike,
-        targetUserId,
+        onLike,
     ]);
     /* eslint-disable react-hooks/refs --
      * These refs are read only by PanResponder event callbacks after render. */
@@ -273,6 +412,18 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
         <View style={styles.page}>
             <StatusBar style="dark" />
             <SafeAreaView style={styles.safeArea} edges={["top"]}>
+                {switchLabel && onSwitch && (
+                    <View pointerEvents="box-none" style={styles.header}>
+                        <Pressable
+                            accessibilityLabel={switchLabel}
+                            accessibilityRole="button"
+                            onPress={onSwitch}
+                            style={styles.teamToggle}
+                        >
+                            <Text style={styles.teamToggleText}>{switchLabel}</Text>
+                        </Pressable>
+                    </View>
+                )}
                 <View style={styles.deck}>
                     {snapshot.next && (
                         <Animated.View
@@ -287,7 +438,7 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                                 },
                             ]}
                         >
-                            <ProfileCard profile={snapshot.next} />
+                            {renderCard(snapshot.next, false)}
                         </Animated.View>
                     )}
                     {activeCard ? (
@@ -322,20 +473,17 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                             >
                                 LIKE
                             </Animated.Text>
-                            <ProfileCard
-                                profile={activeCard.profile}
-                                expanded={isBioOpen}
-                            />
+                            {renderCard(activeCard.profile, isBioOpen)}
                         </Animated.View>
                     ) : !snapshot.isReady ? (
                         <View style={styles.loadingState}>
-                            <Text style={styles.loadingText}>Finding people nearby…</Text>
-                            {recommendationError && (
+                            <Text style={styles.loadingText}>{loadingMessage}</Text>
+                            {error && (
                                 <>
-                                    <Text style={styles.errorText}>{recommendationError}</Text>
+                                    <Text style={styles.errorText}>{error}</Text>
                                     <Pressable
                                         accessibilityRole="button"
-                                        onPress={() => setRecommendationRequestAttempt((attempt) => attempt + 1)}
+                                        onPress={onRetry}
                                     >
                                         <Text style={styles.refreshText}>Try again</Text>
                                     </Pressable>
@@ -347,16 +495,16 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                             <Text style={styles.emptyEmoji}>✨</Text>
                             <Text style={styles.emptyTitle}>You&apos;re all caught up</Text>
                             <Text style={styles.emptyCopy}>
-                                New people will appear here when they&apos;re nearby.
+                                {emptyCopy}
                             </Text>
                             <Pressable style={styles.refreshButton} onPress={queue.reset}>
                                 <Text style={styles.refreshText}>Start over</Text>
                             </Pressable>
-                            {recommendationError && <Text style={styles.errorText}>{recommendationError}</Text>}
+                            {error && <Text style={styles.errorText}>{error}</Text>}
                         </View>
                     )}
                 </View>
-                {(likeError || (activeCard && !targetUserId)) && (
+                {(likeError || (onLike && activeCard && !targetUserId)) && (
                     <View style={styles.likeMessage} accessibilityLiveRegion="polite">
                         <Text style={styles.likeMessageText}>
                             {likeError ??
@@ -378,19 +526,16 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                             isSubmittingLike
                         }
                     />
-                    <ActionButton
-                        label="★"
-                        color="#9B78D1"
-                        size="small"
-                        onPress={() => void handleLike()}
-                        accessibilityLabel="Favorite"
-                        disabled={
-                            !activeCard ||
-                            !targetUserId ||
-                            isSwiping ||
-                            isSubmittingLike
-                        }
-                    />
+                    {showFavorite && (
+                        <ActionButton
+                            label="★"
+                            color="#9B78D1"
+                            size="small"
+                            onPress={() => void handleLike()}
+                            accessibilityLabel="Favorite"
+                            disabled={!activeCard || !targetUserId || isSwiping || isSubmittingLike}
+                        />
+                    )}
                     <ActionButton
                         label="×"
                         color="#E76B6C"
@@ -401,7 +546,7 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                     />
                 </View>
             </SafeAreaView>
-            <MatchOverlay match={matchPresentation} onDismiss={dismissMatch} />
+            {overlay}
         </View>
     );
 }
@@ -481,9 +626,39 @@ function ProfileCard({
     expanded?: boolean;
 }) {
     return (
+        <DiscoverCard
+            imageUrl={profile.avatar_url}
+            title={profile.display_name}
+            subtitle={[profile.skill_level, profile.availability].filter(Boolean).join(" · ") || "Developer"}
+            tags={[...(profile.tech_stack ?? []), ...(profile.preferred_roles ?? [])]}
+            description={profile.bio}
+            expanded={expanded}
+            style={style}
+        />
+    );
+}
+
+export function DiscoverCard({
+    imageUrl,
+    title,
+    subtitle,
+    tags,
+    description,
+    expanded = false,
+    style,
+}: {
+    imageUrl?: string | null;
+    title: string;
+    subtitle: string;
+    tags: readonly string[];
+    description?: string | null;
+    expanded?: boolean;
+    style?: object;
+}) {
+    return (
         <View style={[styles.cardInner, style]}>
             <Image
-                source={{ uri: profile.avatar_url ?? "https://placehold.co/1100x1600/png" }}
+                source={{ uri: imageUrl ?? "https://placehold.co/1100x1600/png" }}
                 style={styles.photo}
                 contentFit="cover"
             />
@@ -491,20 +666,20 @@ function ProfileCard({
             <View style={styles.cardContent}>
                 <View style={styles.nameRow}>
                     <Text style={styles.name}>
-                        {profile.display_name}
+                        {title}
                     </Text>
                 </View>
                 <Text style={styles.distance}>
-                    ● {[profile.skill_level, profile.availability].filter(Boolean).join(" · ") || "Developer"}
+                    ● {subtitle}
                 </Text>
                 <View style={styles.tags}>
-                    {[...(profile.tech_stack ?? []), ...(profile.preferred_roles ?? [])].map((tag) => (
+                    {tags.map((tag) => (
                         <View key={tag} style={styles.tag}>
                             <Text style={styles.tagText}>{tag}</Text>
                         </View>
                     ))}
                 </View>
-                {expanded && profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
+                {expanded && description && <Text style={styles.bio}>{description}</Text>}
             </View>
         </View>
     );
@@ -525,9 +700,7 @@ function ActionButton({
     disabled?: boolean;
 }) {
     return (
-        <BlurView
-            intensity={78}
-            tint="light"
+        <View
             style={[
                 styles.actionGlass,
                 size === "large" ? styles.actionLarge : styles.actionSmall,
@@ -554,7 +727,7 @@ function ActionButton({
                     {label}
                 </Text>
             </Pressable>
-        </BlurView>
+        </View>
     );
 }
 const styles = StyleSheet.create({
@@ -596,6 +769,18 @@ const styles = StyleSheet.create({
         fontSize: 25,
         color: "#564A42",
         transform: [{ rotate: "90deg" }],
+    },
+    teamToggle: {
+        marginLeft: "auto",
+        borderRadius: 20,
+        backgroundColor: "rgba(255,255,255,0.9)",
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+    },
+    teamToggleText: {
+        color: "#564A42",
+        fontSize: 14,
+        fontWeight: "700",
     },
     progressRow: {
         position: "absolute",
