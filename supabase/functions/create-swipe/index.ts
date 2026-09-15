@@ -22,7 +22,20 @@ type SuccessResponse = {
     targetUserId: string;
     decision: "like";
     createdAt: string;
+    matched: boolean;
+    matchCreated: boolean;
+    matchId: string | null;
   };
+};
+
+type AtomicLikeRow = {
+  swipe_id: string;
+  target_user_id: string;
+  decision: "like";
+  created_at: string;
+  matched: boolean;
+  match_created: boolean;
+  match_id: string | null;
 };
 
 const corsHeaders = {
@@ -43,6 +56,21 @@ function jsonResponse(body: ErrorResponse | SuccessResponse, status: number) {
 
 function errorResponse(code: ErrorCode, message: string, status: number) {
   return jsonResponse({ error: { code, message } }, status);
+}
+
+function isAtomicLikeRow(value: unknown): value is AtomicLikeRow {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row.swipe_id === "string" &&
+    typeof row.target_user_id === "string" &&
+    row.decision === "like" &&
+    typeof row.created_at === "string" &&
+    typeof row.matched === "boolean" &&
+    typeof row.match_created === "boolean" &&
+    (typeof row.match_id === "string" || row.match_id === null)
+  );
 }
 
 function getPublishableKey() {
@@ -105,57 +133,43 @@ async function readRequestBody(request: Request) {
 
 async function persistLike(
   client: SupabaseClient,
-  actorUserId: string,
   targetUserId: string,
 ) {
-  const { data: target, error: targetError } = await client
-    .from("profiles")
-    .select("id")
-    .eq("id", targetUserId)
-    .maybeSingle();
-
-  if (targetError) {
-    console.error("create-swipe target lookup failed", {
-      code: targetError.code,
-      message: targetError.message,
-    });
-    return errorResponse(
-      "swipe_failed",
-      "Unable to validate this developer right now.",
-      500,
-    );
-  }
-  if (!target) {
-    return errorResponse(
-      "target_not_found",
-      "That developer profile is no longer available.",
-      404,
-    );
-  }
-
-  const { data: swipe, error: swipeError } = await client
-    .from("swipes")
-    .upsert(
-      {
-        actor_type: "user",
-        actor_id: actorUserId,
-        target_type: "user",
-        target_id: targetUserId,
-        decision: "like",
-        created_by_user_id: actorUserId,
-        created_at: new Date().toISOString(),
-      },
-      { onConflict: "actor_type,actor_id,target_type,target_id" },
-    )
-    .select("id, target_id, decision, created_at")
+  const { data: result, error: workflowError } = await client
+    .rpc("create_user_like_and_match", {
+      p_target_user_id: targetUserId,
+    })
     .single();
 
-  if (swipeError) {
-    console.error("create-swipe upsert failed", {
-      code: swipeError.code,
-      message: swipeError.message,
+  if (workflowError) {
+    console.error("create-swipe workflow failed", {
+      code: workflowError.code,
+      message: workflowError.message,
     });
-    const status = swipeError.code === "42501" ? 403 : 500;
+
+    if (workflowError.message.includes("Target profile does not exist")) {
+      return errorResponse(
+        "target_not_found",
+        "That developer profile is no longer available.",
+        404,
+      );
+    }
+    if (workflowError.message.includes("Authentication is required")) {
+      return errorResponse(
+        "authentication_required",
+        "Your session has expired. Sign in and try again.",
+        401,
+      );
+    }
+    if (workflowError.message.includes("You cannot Like your own developer profile")) {
+      return errorResponse(
+        "self_swipe",
+        "You cannot Like your own developer profile.",
+        400,
+      );
+    }
+
+    const status = workflowError.code === "42501" ? 403 : 500;
     return errorResponse(
       "swipe_failed",
       status === 403
@@ -165,13 +179,26 @@ async function persistLike(
     );
   }
 
+  if (!isAtomicLikeRow(result)) {
+    console.error("create-swipe workflow returned an invalid result");
+    return errorResponse(
+      "swipe_failed",
+      "Unable to save your Like right now.",
+      500,
+    );
+  }
+
+  const swipe = result;
   return jsonResponse(
     {
       data: {
-        swipeId: swipe.id,
-        targetUserId: swipe.target_id,
+        swipeId: swipe.swipe_id,
+        targetUserId: swipe.target_user_id,
         decision: "like",
         createdAt: swipe.created_at,
+        matched: swipe.matched,
+        matchCreated: swipe.match_created,
+        matchId: swipe.match_id,
       },
     },
     200,
@@ -236,5 +263,5 @@ Deno.serve(async (request: Request) => {
     );
   }
 
-  return persistLike(client, user.id, parsedBody.targetUserId);
+  return persistLike(client, parsedBody.targetUserId);
 });

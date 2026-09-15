@@ -12,6 +12,7 @@ import {
 import {
     Animated,
     Dimensions,
+    Modal,
     PanResponder,
     Pressable,
     StyleSheet,
@@ -27,6 +28,10 @@ import {
 import { createReduxProfileQueue } from "@/matching/data-access/redux-profile-queue";
 import { store } from "@/shared/data-access/store";
 import { requestUserRecommendations } from "@/matching/data-access/user-recommendation-service";
+import {
+    completeSuccessfulLike,
+    type MatchPresentation,
+} from "@/matching/swipe/match-presentation";
 import { getSwipeIntent } from "@/matching/swipe/swipe-intent";
 import { useLikeDeveloper } from "@/matching/swipe/use-like-developer";
 
@@ -56,6 +61,8 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     );
     const [isBioOpen, setIsBioOpen] = useState(true);
     const [isSwiping, setIsSwiping] = useState(false);
+    const [matchPresentation, setMatchPresentation] =
+        useState<MatchPresentation | null>(null);
     const [recommendationError, setRecommendationError] = useState<string | null>(null);
     const [recommendationRequestAttempt, setRecommendationRequestAttempt] = useState(0);
     const {
@@ -67,7 +74,7 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
     const swipeInProgress = useRef(false);
     const recommendationRequestInProgress = useRef(false);
     const isInitialRecommendationRequest = useRef(true);
-    const idlePosition = useRef(new Animated.ValueXY()).current;
+    const [idlePosition] = useState(() => new Animated.ValueXY());
     const [activeCard, setActiveCard] = useState<ActiveCard | undefined>(() =>
         snapshot.current
             ? {
@@ -78,6 +85,9 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
             : undefined,
     );
 
+    /* eslint-disable react-hooks/set-state-in-effect --
+     * The animated card intentionally mirrors an external queue snapshot before
+     * paint so the outgoing card keeps its animation value until advancement. */
     useLayoutEffect(() => {
         const currentProfile = snapshot.current;
         const isCurrentCard =
@@ -101,6 +111,7 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
             setIsSwiping(false);
         }
     }, [activeCard, snapshot]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     const position = activeCard?.position ?? idlePosition;
     const targetUserId = activeCard?.profile.id;
@@ -138,27 +149,36 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
             });
     }, [queue, recommendationRequestAttempt, snapshot.length, snapshot.position]);
 
-    const finishSwipe = useCallback((direction: 1 | -1) => {
-        if (!activeCard || swipeInProgress.current) return;
-
-        swipeInProgress.current = true;
-        setIsSwiping(true);
-
-        Animated.timing(position, {
-            toValue: { x: direction * (screenWidth + 80), y: 0 },
-            duration: 230,
-            useNativeDriver: true,
-        }).start(({ finished }) => {
-            if (!finished) {
-                swipeInProgress.current = false;
-                setIsSwiping(false);
+    const finishSwipe = useCallback((direction: 1 | -1) =>
+        new Promise<boolean>((resolve) => {
+            if (!activeCard || swipeInProgress.current) {
+                resolve(false);
                 return;
             }
 
-            queue.advance(activeCard.queuePosition);
-            setIsBioOpen(false);
-        });
-    }, [activeCard, position, queue]);
+            swipeInProgress.current = true;
+            setIsSwiping(true);
+
+            Animated.timing(position, {
+                toValue: { x: direction * (screenWidth + 80), y: 0 },
+                duration: 230,
+                useNativeDriver: true,
+            }).start(({ finished }) => {
+                if (!finished) {
+                    swipeInProgress.current = false;
+                    setIsSwiping(false);
+                    resolve(false);
+                    return;
+                }
+
+                queue.advance(activeCard.queuePosition);
+                setIsBioOpen(false);
+                resolve(true);
+            });
+        }), [activeCard, position, queue]);
+    const dismissMatch = useCallback(() => {
+        setMatchPresentation(null);
+    }, []);
     const resetCard = useCallback(() =>
         Animated.spring(position, {
             toValue: { x: 0, y: 0 },
@@ -166,11 +186,19 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
         }).start(), [position]);
     const handleLike = useCallback(async () => {
         resetCard();
-        if (!targetUserId || isSwiping || isSubmittingLike) return;
+        if (!activeCard || !targetUserId || isSwiping || isSubmittingLike) return;
 
         const result = await submitLike(targetUserId);
-        if (result) finishSwipe(1);
+        if (!result) return;
+
+        await completeSuccessfulLike({
+            result,
+            profile: activeCard.profile,
+            advance: () => finishSwipe(1),
+            present: setMatchPresentation,
+        });
     }, [
+        activeCard,
         finishSwipe,
         isSubmittingLike,
         isSwiping,
@@ -178,6 +206,8 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
         submitLike,
         targetUserId,
     ]);
+    /* eslint-disable react-hooks/refs --
+     * These refs are read only by PanResponder event callbacks after render. */
     const panResponder = useMemo(
         () =>
             PanResponder.create({
@@ -196,7 +226,7 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                     if (intent === "like") {
                         void handleLike();
                     } else if (intent === "pass") {
-                        finishSwipe(-1);
+                        void finishSwipe(-1);
                     } else {
                         resetCard();
                     }
@@ -204,6 +234,7 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
             }),
         [finishSwipe, handleLike, isSubmittingLike, position, resetCard],
     );
+    /* eslint-enable react-hooks/refs */
     const rotation = position.x.interpolate({
         inputRange: [-screenWidth, 0, screenWidth],
         outputRange: ["-13deg", "0deg", "13deg"],
@@ -360,15 +391,82 @@ export function DiscoverView({ queue }: { queue: ProfileQueue }) {
                         label="×"
                         color="#E76B6C"
                         size="large"
-                        onPress={() => finishSwipe(-1)}
+                        onPress={() => void finishSwipe(-1)}
                         accessibilityLabel="Discard"
                         disabled={!activeCard || isSwiping || isSubmittingLike}
                     />
                 </View>
             </SafeAreaView>
+            <MatchOverlay match={matchPresentation} onDismiss={dismissMatch} />
         </View>
     );
 }
+
+function MatchOverlay({
+    match,
+    onDismiss,
+}: {
+    match: MatchPresentation | null;
+    onDismiss: () => void;
+}) {
+    if (!match) return null;
+
+    return (
+        <Modal
+            animationType="fade"
+            onRequestClose={onDismiss}
+            statusBarTranslucent
+            transparent
+            visible
+        >
+            <View
+                accessibilityViewIsModal
+                style={styles.matchBackdrop}
+            >
+                <View
+                    style={styles.matchDialog}
+                >
+                    <Text style={styles.matchEyebrow}>PAIRUP</Text>
+                    <Text
+                        accessibilityLabel={`It’s a Match with ${match.displayName}`}
+                        accessibilityLiveRegion="assertive"
+                        accessibilityRole="header"
+                        style={styles.matchTitle}
+                    >
+                        It’s a Match
+                    </Text>
+                    <Image
+                        accessibilityLabel={`${match.displayName} profile photo`}
+                        contentFit="cover"
+                        source={{
+                            uri:
+                                match.avatarUrl ??
+                                "https://placehold.co/320x320/png",
+                        }}
+                        style={styles.matchAvatar}
+                    />
+                    <Text style={styles.matchName}>{match.displayName}</Text>
+                    <Text style={styles.matchCopy}>
+                        You both want to build something great together.
+                    </Text>
+                    <Pressable
+                        accessibilityHint="Closes this match confirmation"
+                        accessibilityLabel="Keep swiping"
+                        accessibilityRole="button"
+                        onPress={onDismiss}
+                        style={({ pressed }) => [
+                            styles.matchButton,
+                            pressed && styles.matchButtonPressed,
+                        ]}
+                    >
+                        <Text style={styles.matchButtonText}>Keep swiping</Text>
+                    </Pressable>
+                </View>
+            </View>
+        </Modal>
+    );
+}
+
 function ProfileCard({
     profile,
     style,
@@ -656,4 +754,72 @@ const styles = StyleSheet.create({
     },
     refreshText: { color: "#fff", fontWeight: "700" },
     errorText: { color: "#9D3029", marginTop: 12, textAlign: "center" },
+    matchBackdrop: {
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        backgroundColor: "rgba(32, 23, 20, 0.72)",
+    },
+    matchDialog: {
+        width: "100%",
+        maxWidth: 380,
+        alignItems: "center",
+        borderRadius: 28,
+        paddingHorizontal: 28,
+        paddingVertical: 32,
+        backgroundColor: "#FFFDF9",
+        boxShadow: "0px 12px 30px rgba(36, 25, 22, 0.30)",
+        elevation: 12,
+    },
+    matchEyebrow: {
+        color: "#9B78D1",
+        fontSize: 11,
+        fontWeight: "800",
+        letterSpacing: 2,
+    },
+    matchTitle: {
+        marginTop: 6,
+        color: "#342A25",
+        fontSize: 32,
+        fontWeight: "800",
+        letterSpacing: -1,
+    },
+    matchAvatar: {
+        width: 148,
+        height: 148,
+        marginTop: 22,
+        borderRadius: 74,
+        backgroundColor: "#F1E7DF",
+    },
+    matchName: {
+        marginTop: 18,
+        color: "#342A25",
+        fontSize: 23,
+        fontWeight: "700",
+    },
+    matchCopy: {
+        marginTop: 8,
+        color: "#75675F",
+        fontSize: 14,
+        lineHeight: 20,
+        textAlign: "center",
+    },
+    matchButton: {
+        width: "100%",
+        minHeight: 48,
+        marginTop: 24,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: 24,
+        backgroundColor: "#38BA8D",
+    },
+    matchButtonPressed: {
+        opacity: 0.82,
+    },
+    matchButtonText: {
+        color: "#FFFFFF",
+        fontSize: 15,
+        fontWeight: "800",
+    },
 });

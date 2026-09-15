@@ -5,6 +5,9 @@ export type LikeDeveloperResult = {
   targetUserId: string;
   decision: "like";
   createdAt: string;
+  matched: boolean;
+  matchCreated: boolean;
+  matchId: string | null;
 };
 
 type CreateSwipeResponse = {
@@ -17,6 +20,23 @@ type FunctionErrorBody = {
     message?: string;
   };
 };
+
+function isLikeDeveloperResult(value: unknown): value is LikeDeveloperResult {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+
+  const result = value as Record<string, unknown>;
+  return (
+    typeof result.swipeId === "string" &&
+    typeof result.targetUserId === "string" &&
+    result.decision === "like" &&
+    typeof result.createdAt === "string" &&
+    typeof result.matched === "boolean" &&
+    typeof result.matchCreated === "boolean" &&
+    (typeof result.matchId === "string" || result.matchId === null) &&
+    (!result.matchCreated || result.matched) &&
+    (!result.matched || typeof result.matchId === "string")
+  );
+}
 
 async function getFunctionErrorMessage(cause: unknown) {
   const fallback =
@@ -53,7 +73,7 @@ export async function likeDeveloper(
   if (error) {
     throw new Error(await getFunctionErrorMessage(error));
   }
-  if (!data?.data) {
+  if (!isLikeDeveloperResult(data?.data)) {
     throw new Error("The Like was saved, but the server returned an invalid response.");
   }
 

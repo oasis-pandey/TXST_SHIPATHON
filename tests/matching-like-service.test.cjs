@@ -38,6 +38,9 @@ test("Like invokes create-swipe with only the target and Like decision", async (
     targetUserId: "target-id",
     decision: "like",
     createdAt: "2026-09-14T22:00:00.000Z",
+    matched: true,
+    matchCreated: true,
+    matchId: "match-id",
   };
   const { calls, likeDeveloper } = setup({
     data: { data: response },
@@ -81,4 +84,22 @@ test("Like rejects an invalid success response", async () => {
   const { likeDeveloper } = setup({ data: {}, error: null });
 
   await assert.rejects(likeDeveloper("target-id"), /invalid response/);
+});
+
+test("Like preserves a stable existing-match result", async () => {
+  const response = {
+    swipeId: "swipe-id",
+    targetUserId: "target-id",
+    decision: "like",
+    createdAt: "2026-09-14T22:00:00.000Z",
+    matched: true,
+    matchCreated: false,
+    matchId: "existing-match-id",
+  };
+  const { likeDeveloper } = setup({
+    data: { data: response },
+    error: null,
+  });
+
+  assert.deepEqual(await likeDeveloper("target-id"), response);
 });

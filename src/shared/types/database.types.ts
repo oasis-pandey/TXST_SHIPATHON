@@ -389,6 +389,18 @@ export type Database = {
         }
         Returns: string
       }
+      create_user_like_and_match: {
+        Args: { p_target_user_id: string }
+        Returns: {
+          created_at: string
+          decision: string
+          match_created: boolean
+          match_id: string | null
+          matched: boolean
+          swipe_id: string
+          target_user_id: string
+        }[]
+      }
       finalize_team_membership_proposal: {
         Args: { p_proposal_id: string }
         Returns: boolean
