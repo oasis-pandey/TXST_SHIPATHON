@@ -1,4 +1,5 @@
 import type { PropsWithChildren, ReactNode } from 'react';
+import { SymbolView } from 'expo-symbols';
 import {
   ActivityIndicator,
   Pressable,
@@ -109,6 +110,32 @@ export function ChatButton({
   );
 }
 
+export function ChatIconButton({
+  accessibilityLabel,
+  onPress,
+}: {
+  accessibilityLabel: string;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => [styles.iconButton, pressed && styles.buttonMuted]}>
+      <SymbolView
+        name={{ ios: 'square.and.pencil', android: 'edit_square', web: 'edit_square' }}
+        size={24}
+        weight="semibold"
+        tintColor={theme.text}
+      />
+    </Pressable>
+  );
+}
+
 function initialsFor(value: string) {
   const parts = value.trim().split(/\s+/).slice(0, 2);
   const initials = parts.map((part) => part[0] ?? '').join('');
@@ -208,6 +235,14 @@ const styles = StyleSheet.create({
   primaryButton: { backgroundColor: '#1677ff' },
   secondaryButton: { backgroundColor: 'rgba(127, 127, 127, 0.18)' },
   buttonMuted: { opacity: 0.55 },
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(127, 127, 127, 0.16)',
+  },
   primaryLabel: { color: '#ffffff' },
   avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(60, 135, 247, 0.16)' },
   avatarFallback: { alignItems: 'center', justifyContent: 'center' },

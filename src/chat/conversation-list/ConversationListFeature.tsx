@@ -1,23 +1,36 @@
 import { Link, router } from 'expo-router';
-import { useCallback, useEffect, useRef } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Spacing } from '@/shared/lib/theme';
 import { useResource } from '@/shared/hooks/use-resource';
 import { isSupabaseConfigured } from '@/shared/lib/supabase';
 import { ThemedText } from '@/shared/ui/themed-text';
 
-import { isChatBackendMissing, listConversations } from '@/chat/data-access/chat-service';
+import {
+  isChatBackendMissing,
+  listConversations,
+  listMessageTargets,
+  openConversationWith,
+} from '@/chat/data-access/chat-service';
+import type { MessageTarget, MessageTargetType } from '@/chat/data-access/chat-types';
 import { subscribeToConversationList } from '@/chat/data-access/chat-realtime';
 import {
-  ChatButton,
   ChatEmptyState,
   ChatErrorState,
+  ChatIconButton,
   ChatLoadingState,
   ChatScreen,
+  ConversationAvatar,
   chatStyles,
 } from '@/chat/ui/ChatComponents';
 import { ConversationRow } from '@/chat/ui/ConversationRow';
+
+type ChatListData = {
+  conversations: Awaited<ReturnType<typeof listConversations>>;
+  targets: MessageTarget[];
+  backendReady: boolean;
+};
 
 /**
  * Every conversation the user belongs to, in one generic list. Direct and team
@@ -28,15 +41,22 @@ export default function ConversationListFeature() {
   // screen, so it resolves to the same empty state instead of an error.
   const loader = useCallback(async () => {
     try {
-      return { conversations: await listConversations(), backendReady: true };
+      const [conversations, targets] = await Promise.all([
+        listConversations(),
+        listMessageTargets(),
+      ]);
+      return { conversations, targets, backendReady: true } satisfies ChatListData;
     } catch (cause) {
       if (!isChatBackendMissing(cause)) throw cause;
-      return { conversations: [], backendReady: false };
+      return { conversations: [], targets: [], backendReady: false } satisfies ChatListData;
     }
   }, []);
   const resource = useResource(loader);
   const refresh = resource.refresh;
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [context, setContext] = useState<MessageTargetType>('person');
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -59,6 +79,23 @@ export default function ConversationListFeature() {
     };
   }, [refresh]);
 
+  const openTarget = useCallback(async (target: MessageTarget) => {
+    setOpeningId(target.targetId);
+    setOpenError(null);
+    try {
+      const conversationId = await openConversationWith(target);
+      router.push({ pathname: '/chat/[conversationId]', params: { conversationId } });
+    } catch (cause) {
+      setOpenError(
+        cause && typeof cause === 'object' && 'message' in cause && typeof cause.message === 'string'
+          ? cause.message
+          : 'Could not open that conversation. Please try again.',
+      );
+    } finally {
+      setOpeningId(null);
+    }
+  }, []);
+
   if (!isSupabaseConfigured) {
     return (
       <ChatScreen>
@@ -68,51 +105,105 @@ export default function ConversationListFeature() {
   }
 
   const conversations = resource.data?.conversations ?? [];
+  const targets = (resource.data?.targets ?? []).filter((target) => target.targetType === context);
+  const sectionTitle = context === 'person' ? 'Your Matches' : 'Your Teams';
 
   return (
     <ChatScreen>
       <View style={styles.header}>
         <ThemedText type="subtitle">Chat</ThemedText>
         <Link href="/chat/new" asChild>
-          <ChatButton label="Start chat" onPress={() => {}} />
+          <ChatIconButton accessibilityLabel="Start a new chat" onPress={() => {}} />
         </Link>
       </View>
 
+      <View style={styles.switcher}>
+        {(['person', 'team'] as const).map((item) => (
+          <Pressable
+            key={item}
+            accessibilityRole="button"
+            accessibilityState={{ selected: item === context }}
+            onPress={() => setContext(item)}
+            style={[styles.switch, item === context && styles.switchActive]}>
+            <ThemedText type="smallBold" themeColor={item === context ? 'text' : 'textSecondary'}>
+              {item === 'person' ? 'Users' : 'Teams'}
+            </ThemedText>
+          </Pressable>
+        ))}
+      </View>
+
+      {openError ? <ChatErrorState message={openError} /> : null}
       {resource.error ? (
         <ChatErrorState message={resource.error} onRetry={() => void resource.refresh()} />
       ) : null}
 
       {resource.loading && !resource.data ? <ChatLoadingState label="Loading conversations" /> : null}
 
-      {resource.data && !conversations.length ? (
+      {resource.data && !targets.length && !conversations.length ? (
         <ChatEmptyState
-          title="No active conversations"
-          action={<ChatButton label="Start chat" onPress={() => router.push('/chat/new')} />}>
+          title={context === 'person' ? 'No matches yet' : 'No teams yet'}
+          action={
+            <ChatIconButton
+              accessibilityLabel="Start a new chat"
+              onPress={() => router.push('/chat/new')}
+            />
+          }>
           {resource.data.backendReady
-            ? 'Message someone you matched with, or open the conversation for one of your teams.'
+            ? context === 'person'
+              ? 'Your matches will appear here when you connect with someone in Discover.'
+              : 'Your team conversations will appear here when you join or create a team.'
             : 'Chat is not set up on this Supabase project yet. Apply the chat migration to start messaging.'}
         </ChatEmptyState>
       ) : null}
 
-      {conversations.length ? (
-        <FlatList
+      {resource.data ? (
+        <ScrollView
           style={chatStyles.fill}
-          data={conversations}
-          keyExtractor={(conversation) => conversation.id}
-          refreshing={resource.loading}
-          onRefresh={() => void resource.refresh()}
-          renderItem={({ item }) => (
-            <ConversationRow
-              conversation={item}
-              onPress={() =>
-                router.push({
-                  pathname: '/chat/[conversationId]',
-                  params: { conversationId: item.id },
-                })
-              }
-            />
-          )}
-        />
+          refreshControl={undefined}
+          contentContainerStyle={styles.content}
+          onScrollBeginDrag={() => undefined}>
+          {conversations.length ? (
+            <View>
+              <ThemedText type="smallBold" style={styles.sectionTitle}>Recent conversations</ThemedText>
+              {conversations.map((conversation) => (
+                <ConversationRow
+                  key={conversation.id}
+                  conversation={conversation}
+                  onPress={() => router.push({ pathname: '/chat/[conversationId]', params: { conversationId: conversation.id } })}
+                />
+              ))}
+            </View>
+          ) : null}
+
+          {targets.length ? (
+            <View>
+              <ThemedText type="smallBold" style={styles.sectionTitle}>{sectionTitle}</ThemedText>
+              {targets.map((target) => (
+                <Pressable
+                  key={`${target.targetType}:${target.targetId}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open chat with ${target.title}`}
+                  disabled={openingId !== null}
+                  onPress={() => void openTarget(target)}
+                  style={({ pressed }) => [styles.targetRow, pressed && styles.pressed]}>
+                  <ConversationAvatar
+                    title={target.title}
+                    avatarUrl={target.avatarUrl}
+                    badge={target.targetType === 'team' ? 'T' : undefined}
+                  />
+                  <View style={chatStyles.fill}>
+                    <ThemedText type="smallBold" numberOfLines={1}>{target.title}</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                      {openingId === target.targetId
+                        ? 'Opening…'
+                        : target.conversationId ? 'Continue conversation' : 'Open conversation'}
+                    </ThemedText>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </ScrollView>
       ) : null}
     </ChatScreen>
   );
@@ -127,4 +218,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     gap: Spacing.two,
   },
+  switcher: { flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingBottom: Spacing.two },
+  switch: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, borderRadius: 999, backgroundColor: 'rgba(127, 127, 127, 0.16)' },
+  switchActive: { backgroundColor: 'rgba(60, 135, 247, 0.24)' },
+  content: { paddingBottom: Spacing.four },
+  sectionTitle: { paddingHorizontal: Spacing.three, paddingTop: Spacing.three, paddingBottom: Spacing.one },
+  targetRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingHorizontal: Spacing.three, paddingVertical: Spacing.three },
+  pressed: { opacity: 0.6 },
 });
