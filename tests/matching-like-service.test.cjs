@@ -41,6 +41,8 @@ test("Like invokes create-swipe with only the target and Like decision", async (
     matched: true,
     matchCreated: true,
     matchId: "match-id",
+    teamCreated: true,
+    teamId: "team-id",
   };
   const { calls, likeDeveloper } = setup({
     data: { data: response },
@@ -95,6 +97,8 @@ test("Like preserves a stable existing-match result", async () => {
     matched: true,
     matchCreated: false,
     matchId: "existing-match-id",
+    teamCreated: false,
+    teamId: "existing-team-id",
   };
   const { likeDeveloper } = setup({
     data: { data: response },

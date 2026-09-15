@@ -25,6 +25,14 @@ function chooseRandomCandidates(candidates: Candidate[]) {
     .slice(0, PLACEHOLDER_QUEUE_SIZE);
 }
 
+export function excludeDecidedCandidates(
+  candidates: Candidate[],
+  decidedTargetIds: string[],
+) {
+  const decidedProfileIds = new Set(decidedTargetIds);
+  return candidates.filter((profile) => !decidedProfileIds.has(profile.id));
+}
+
 export default {
   fetch: withSupabase({ auth: "user" }, async (_request, ctx) => {
     const actorId = ctx.userClaims?.id;
@@ -34,6 +42,18 @@ export default {
 
     // Placeholder only: replace this random selection with the recommendation
     // algorithm once its inputs and ranking contract are defined.
+    const { data: decidedSwipes, error: swipesError } = await ctx.supabaseAdmin
+      .from("swipes")
+      .select("target_id")
+      .eq("actor_type", "user")
+      .eq("actor_id", actorId)
+      .eq("target_type", "user");
+
+    if (swipesError) {
+      console.error("Could not load decided profiles", swipesError);
+      return Response.json({ error: "Could not load queue candidates." }, { status: 500 });
+    }
+
     const { data: profiles, error: profilesError } = await ctx.supabaseAdmin
       .from("profiles")
       .select(
@@ -46,7 +66,11 @@ export default {
       return Response.json({ error: "Could not load queue candidates." }, { status: 500 });
     }
 
-    const candidates = chooseRandomCandidates((profiles ?? []) as Candidate[]);
+    const eligibleProfiles = excludeDecidedCandidates(
+      (profiles ?? []) as Candidate[],
+      (decidedSwipes ?? []).map((swipe) => swipe.target_id),
+    );
+    const candidates = chooseRandomCandidates(eligibleProfiles);
     if (!candidates.length) {
       return Response.json({ added: 0, recommendations: [] });
     }
